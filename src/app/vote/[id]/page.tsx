@@ -52,7 +52,7 @@ export default function VotePage() {
       } catch (err: unknown) {
         const error = err as { code?: string; message?: string };
         if (error.code === 'ECONNREFUSED' || error.message === 'Network Error') {
-          setError('백엔드 서버에 연결할 수 없습니다. localhost:3001이 실행 중인지 확인하세요.');
+          setError('백엔드 서버에 연결할 수 없습니다. 서버 상태를 확인하세요.');
         } else {
           setError('주제를 불러오는 데 실패했습니다.');
         }
