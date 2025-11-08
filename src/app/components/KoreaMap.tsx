@@ -290,10 +290,6 @@ export default function KoreaMap({
                     return;
                 }
 
-                // viewBox 가져오기
-                const vb = svgElement.getAttribute('viewBox');
-                if (vb) setViewBox(vb);
-
                 // SVG를 컨테이너에 추가하고 반응형으로 설정
                 const clonedSvg = svgElement.cloneNode(true) as SVGElement;
                 
