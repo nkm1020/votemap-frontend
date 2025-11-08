@@ -133,7 +133,7 @@ export default function VotePage() {
                     value={selectedRegion}
                     onChange={(e) => setSelectedRegion(e.target.value)}
                     className="w-full px-4 py-3 text-lg border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    disabled={voteStatus === 'voting' || voteStatus === 'voted'}
+                    disabled={voteStatus !== 'idle'}
                   >
                     <option value="">지역을 선택하세요</option>
                     {KOREAN_REGIONS.map((region) => (
@@ -147,14 +147,14 @@ export default function VotePage() {
                 <div className="flex justify-center gap-4 mb-4">
                   <button 
                     onClick={() => handleVote('A')}
-                    disabled={voteStatus === 'voting' || voteStatus === 'voted' || !selectedRegion}
+                    disabled={voteStatus !== 'idle' || !selectedRegion}
                     className="rounded-md bg-blue-500 px-8 py-4 text-2xl font-bold text-white transition hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     {topic.option_a}
                   </button>
                   <button
                     onClick={() => handleVote('B')}
-                    disabled={voteStatus === 'voting' || voteStatus === 'voted' || !selectedRegion}
+                    disabled={voteStatus !== 'idle' || !selectedRegion}
                     className="rounded-md bg-red-500 px-8 py-4 text-2xl font-bold text-white transition hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     {topic.option_b}
