@@ -81,7 +81,6 @@ export default function KoreaMap({
     const svgContainerRef = useRef<HTMLDivElement>(null);
     const svgWrapperRef = useRef<HTMLDivElement>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
-    const [viewBox, setViewBox] = useState<string>('0 0 800 759');
     const [scale, setScale] = useState<number>(1);
     const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
     const [isDragging, setIsDragging] = useState<boolean>(false);
@@ -164,7 +163,6 @@ export default function KoreaMap({
             
             // viewBox 가져오기 (기본값 사용)
             const viewBox = regionSvg.getAttribute('viewBox') || '0 0 800 666';
-            const [vx, vy, vw, vh] = viewBox.split(' ').map(Number);
             
             // 임시 SVG를 만들어서 바운딩 박스 계산
             const tempSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');

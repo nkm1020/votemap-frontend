@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
+import { getApiUrl } from './lib/api';
 
 /**
  * 투표 주제 정보 인터페이스
@@ -34,14 +35,15 @@ export default function HomePage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await axios.get('http://localhost:3001/topics', {
+        const response = await axios.get(getApiUrl('/topics'), {
           timeout: 5000, // 5초 타임아웃 추가
         });
         setTopics(response.data);
-      } catch (err: any) {
-        if (err.code === 'ECONNREFUSED' || err.message === 'Network Error') {
+      } catch (err: unknown) {
+        const error = err as { code?: string; message?: string };
+        if (error.code === 'ECONNREFUSED' || error.message === 'Network Error') {
           setError('백엔드 서버에 연결할 수 없습니다. localhost:3001이 실행 중인지 확인하세요.');
-        } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
           setError('요청 시간이 초과되었습니다. 백엔드 서버 상태를 확인하세요.');
         } else {
           setError('주제를 불러오는 데 실패했습니다.');

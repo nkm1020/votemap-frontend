@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useRouter, useParams } from 'next/navigation';
 import { KOREAN_REGIONS } from '../../lib/regions';
+import { getApiUrl } from '../../lib/api';
 
 /**
  * 투표 주제 정보 인터페이스
@@ -46,10 +47,11 @@ export default function VotePage() {
     const fetchData = async () => {
       if (!topicId) return;
       try {
-        const response = await axios.get(`http://localhost:3001/topics/${topicId}`);
+        const response = await axios.get(getApiUrl(`/topics/${topicId}`));
         setTopic(response.data);
-      } catch (err: any) {
-        if (err.code === 'ECONNREFUSED' || err.message === 'Network Error') {
+      } catch (err: unknown) {
+        const error = err as { code?: string; message?: string };
+        if (error.code === 'ECONNREFUSED' || error.message === 'Network Error') {
           setError('백엔드 서버에 연결할 수 없습니다. localhost:3001이 실행 중인지 확인하세요.');
         } else {
           setError('주제를 불러오는 데 실패했습니다.');
@@ -81,7 +83,7 @@ export default function VotePage() {
     setError(null);
 
     try {
-      await axios.post('http://localhost:3001/votes', {
+      await axios.post(getApiUrl('/votes'), {
         topic_id: topic.id,
         choice: choice,
         region: selectedRegion,

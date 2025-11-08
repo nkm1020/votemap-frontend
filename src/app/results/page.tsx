@@ -10,6 +10,7 @@ import axios from 'axios';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
 import KoreaMap from '../components/KoreaMap';
+import { getApiUrl, getSocketUrl } from '../lib/api';
 
 /**
  * 투표 결과 데이터 인터페이스
@@ -55,14 +56,14 @@ export default function ResultsPage() {
         const fetchData = async () => {
             try {
                 // 주제 선택기를 위한 모든 주제 목록 불러오기
-                const topicsResponse = await axios.get('http://localhost:3001/topics');
+                const topicsResponse = await axios.get(getApiUrl('/topics'));
                 setTopics(topicsResponse.data);
                 
                 // 현재 선택한 주제 정보 및 투표 결과 불러오기
-                const topicResponse = await axios.get(`http://localhost:3001/topics/${topicId}`);
+                const topicResponse = await axios.get(getApiUrl(`/topics/${topicId}`));
                 setTopic(topicResponse.data);
                 
-                const resultsResponse = await axios.get(`http://localhost:3001/topics/${topicId}/results`);
+                const resultsResponse = await axios.get(getApiUrl(`/topics/${topicId}/results`));
                 setResults(resultsResponse.data);
             } catch (err) {
                 setError('데이터를 불러오는 데 실패했습니다.');
@@ -75,7 +76,7 @@ export default function ResultsPage() {
         fetchData();
 
         // WebSocket 연결 설정 (실시간 투표 결과 업데이트를 위해)
-        const socket = io('http://localhost:3001', {
+        const socket = io(getSocketUrl(), {
             transports: ['websocket', 'polling'],
         });
 
