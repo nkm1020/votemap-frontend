@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/**
+ * 전역 CSS 변수 설정
+ */
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -12,6 +15,9 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/**
+ * 다크 모드 지원
+ */
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
@@ -19,19 +25,11 @@
   }
 }
 
+/**
+ * 전역 body 스타일
+ */
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
-}
-
-/* 기존 body 내용 밑에 추가 또는 수정 */
-body {
-    color: rgb(var(--foreground-rgb));
-    background: linear-gradient(
-        to bottom,
-        transparent,
-        rgb(var(--background-end-rgb))
-      )
-      rgb(var(--background-start-rgb));
 }
