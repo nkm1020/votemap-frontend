@@ -10,6 +10,10 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost
 if (typeof window !== 'undefined') {
   console.log('[API Config] API_BASE_URL:', API_BASE_URL);
   console.log('[API Config] NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
+  // 환경 변수가 없으면 경고
+  if (!process.env.NEXT_PUBLIC_API_URL) {
+    console.warn('[API Config] ⚠️ NEXT_PUBLIC_API_URL이 설정되지 않았습니다! Vercel 환경 변수를 확인하세요.');
+  }
 }
 
 /**
