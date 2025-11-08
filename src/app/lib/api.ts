@@ -6,6 +6,12 @@
 // 백엔드 API 기본 URL
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
+// 디버깅: 환경 변수 확인
+if (typeof window !== 'undefined') {
+  console.log('[API Config] API_BASE_URL:', API_BASE_URL);
+  console.log('[API Config] NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
+}
+
 /**
  * API 엔드포인트를 생성합니다
  */
@@ -18,7 +24,14 @@ export function getApiUrl(endpoint: string): string {
   // 상대 경로인 경우 기본 URL과 결합
   const baseUrl = API_BASE_URL.replace(/\/$/, ''); // 끝의 슬래시 제거
   const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  return `${baseUrl}${path}`;
+  const fullUrl = `${baseUrl}${path}`;
+  
+  // 디버깅: 생성된 URL 확인
+  if (typeof window !== 'undefined') {
+    console.log('[API] Request URL:', fullUrl);
+  }
+  
+  return fullUrl;
 }
 
 /**
