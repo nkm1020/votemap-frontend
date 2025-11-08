@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import axios from 'axios';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
@@ -31,10 +31,10 @@ interface Topic {
 }
 
 /**
- * 결과 페이지 컴포넌트
- * 선택한 주제의 투표 결과를 통계로 표시하며, WebSocket을 통해 실시간 업데이트합니다.
+ * 결과 페이지 내부 컴포넌트
+ * useSearchParams를 사용하는 부분을 분리했습니다.
  */
-export default function ResultsPage() {
+function ResultsPageContent() {
     const [results, setResults] = useState<ResultsData | null>(null);
     const [topic, setTopic] = useState<Topic | null>(null);
     const [topics, setTopics] = useState<Topic[]>([]);
@@ -278,5 +278,17 @@ export default function ResultsPage() {
                 </div>
             </div>
         </main>
+    );
+}
+
+/**
+ * 결과 페이지 컴포넌트
+ * Suspense로 감싸서 useSearchParams를 안전하게 사용합니다.
+ */
+export default function ResultsPage() {
+    return (
+        <Suspense fallback={<div className="flex min-h-screen items-center justify-center text-xl">결과를 불러오는 중...</div>}>
+            <ResultsPageContent />
+        </Suspense>
     );
 }
