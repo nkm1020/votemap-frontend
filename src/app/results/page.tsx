@@ -44,7 +44,7 @@ function ResultsPageContent() {
     const socketRef = useRef<Socket | null>(null);
     const router = useRouter();
     const searchParams = useSearchParams();
-    
+
     const topicId = searchParams?.get('topic') || '1';
 
     /**
@@ -58,11 +58,11 @@ function ResultsPageContent() {
                 // 주제 선택기를 위한 모든 주제 목록 불러오기
                 const topicsResponse = await axios.get(getApiUrl('/topics'));
                 setTopics(topicsResponse.data);
-                
+
                 // 현재 선택한 주제 정보 및 투표 결과 불러오기
                 const topicResponse = await axios.get(getApiUrl(`/topics/${topicId}`));
                 setTopic(topicResponse.data);
-                
+
                 const resultsResponse = await axios.get(getApiUrl(`/topics/${topicId}/results`));
                 setResults(resultsResponse.data);
             } catch (err) {
@@ -117,11 +117,11 @@ function ResultsPageContent() {
     if (loading && !results) {
         return <div className="flex min-h-screen items-center justify-center text-xl">결과를 불러오는 중...</div>;
     }
-    
+
     if (error) {
         return <div className="flex min-h-screen items-center justify-center text-xl text-red-500">{error}</div>;
     }
-    
+
     if (!results || !topic) {
         return <div className="flex min-h-screen items-center justify-center text-xl">데이터가 없습니다.</div>;
     }
@@ -129,7 +129,7 @@ function ResultsPageContent() {
     const { total, by_region } = results;
     const percentA = total.total_votes > 0 ? ((total.A / total.total_votes) * 100).toFixed(1) : 0;
     const percentB = total.total_votes > 0 ? ((total.B / total.total_votes) * 100).toFixed(1) : 0;
-    
+
     // 총 투표수 기준으로 지역을 정렬하여 순위 표시
     const sortedRegions = Object.entries(by_region)
         .map(([region, data]) => ({
@@ -141,138 +141,184 @@ function ResultsPageContent() {
         .sort((a, b) => b.total - a.total);
 
     return (
-        <main className="min-h-screen bg-gray-100">
-            <header className="bg-white shadow-sm sticky top-0 z-10">
+        <main className="min-h-screen bg-[#F5F5F7] font-sans selection:bg-blue-100 selection:text-blue-900 pb-20">
+            {/* Sticky Glass Header */}
+            <header className="sticky top-0 z-30 bg-white/70 backdrop-blur-xl border-b border-gray-200/50 transition-all duration-300">
                 <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-                    <div className="flex-1">
-                        <div className="flex items-center gap-4 mb-2">
-                            <h1 className="text-3xl font-extrabold text-gray-800">{topic.title}</h1>
-                            {topics.length > 0 && (
-                                <select
-                                    value={topicId}
-                                    onChange={(e) => {
-                                        router.push(`/results?topic=${e.target.value}`);
-                                    }}
-                                    className="px-3 py-1 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                >
-                                    {topics.map((t) => (
-                                        <option key={t.id} value={t.id}>
-                                            {t.title}
-                                        </option>
-                                    ))}
-                                </select>
-                            )}
+                    <div className="flex-1 flex items-center gap-6">
+                        <div
+                            className="w-10 h-10 bg-black rounded-xl flex items-center justify-center text-white font-bold text-lg cursor-pointer hover:scale-105 transition-transform"
+                            onClick={() => router.push('/')}
+                        >
+                            V
                         </div>
-                        <p className="text-lg text-gray-600">
-                            총 {total.total_votes.toLocaleString()}명 참여 · 
-                            <span className={isConnected ? 'text-green-500' : 'text-gray-400'}>
-                                {' '}{isConnected ? '실시간 연결됨' : '연결 중...'}
-                            </span>
-                        </p>
+
+                        <div className="h-8 w-px bg-gray-300/50"></div>
+
+                        <div>
+                            <div className="flex items-center gap-3">
+                                <h1 className="text-xl font-bold text-gray-900 tracking-tight">{topic.title}</h1>
+                                {topics.length > 0 && (
+                                    <div className="relative group">
+                                        <select
+                                            value={topicId}
+                                            onChange={(e) => {
+                                                router.push(`/results?topic=${e.target.value}`);
+                                            }}
+                                            className="appearance-none pl-2 pr-8 py-1 rounded-lg bg-gray-100 text-sm font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer hover:bg-gray-200 connection-select"
+                                        >
+                                            {topics.map((t) => (
+                                                <option key={t.id} value={t.id}>
+                                                    {t.title}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <polyline points="6 9 12 15 18 9"></polyline>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                                <span className={`flex h-2 w-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-300 animate-pulse'}`}></span>
+                                <p className="text-xs font-medium text-gray-500">
+                                    {total.total_votes.toLocaleString()} Votes ·
+                                    <span className={isConnected ? 'text-green-600 ml-1' : 'text-gray-400 ml-1'}>
+                                        {isConnected ? 'Live' : 'Connecting...'}
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
                     </div>
-                    <div className="flex gap-2">
+
+                    <div className="flex gap-3">
                         <button
                             onClick={() => router.push(`/vote/${topicId}`)}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
+                            className="px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-full hover:bg-blue-700 active:scale-95 transition-all duration-200 shadow-lg shadow-blue-500/30"
                         >
-                            투표하기
-                        </button>
-                        <button
-                            onClick={() => router.push('/')}
-                            className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition"
-                        >
-                            홈으로
+                            Vote Now
                         </button>
                     </div>
                 </div>
             </header>
 
-            <div className="max-w-7xl mx-auto p-6">
-                {/* Nationwide Results */}
-                <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-                    <h2 className="text-2xl font-bold mb-4">전국 판세</h2>
-                    <div className="flex items-center gap-4 mb-4">
-                        <div className="flex-1">
-                            <div className="flex justify-between font-bold text-lg mb-2">
-                                <span className="text-blue-600">{topic.option_a} ({percentA}%)</span>
-                                <span className="text-gray-600">{total.A.toLocaleString()}표</span>
+            <div className="max-w-7xl mx-auto p-6 lg:p-10 space-y-8">
+                {/* Nationwide Results Widget */}
+                <div className="bg-white rounded-3xl shadow-[0_2px_15px_rgb(0,0,0,0.04)] p-8 border border-white/60">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                        Global Trend
+                        <span className="text-sm font-normal text-gray-400 px-2 py-1 bg-gray-50 rounded-lg">Nationwide</span>
+                    </h2>
+
+                    <div className="flex flex-col md:flex-row gap-8 items-center">
+                        {/* Option A */}
+                        <div className="flex-1 w-full">
+                            <div className="flex justify-between items-end mb-3">
+                                <span className="text-lg font-bold text-gray-900">{topic.option_a}</span>
+                                <div className="text-right">
+                                    <span className="text-3xl font-extrabold text-blue-600">{percentA}%</span>
+                                    <span className="text-sm text-gray-400 ml-2 font-medium">{total.A.toLocaleString()}</span>
+                                </div>
                             </div>
-                            <div className="h-8 bg-gray-200 rounded-full overflow-hidden">
-                                <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${percentA}%` }}></div>
+                            <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-blue-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.3)] transition-all duration-1000 ease-out"
+                                    style={{ width: `${percentA}%` }}
+                                ></div>
                             </div>
                         </div>
-                        <div className="flex-1">
-                            <div className="flex justify-between font-bold text-lg mb-2">
-                                <span className="text-red-600">{topic.option_b} ({percentB}%)</span>
-                                <span className="text-gray-600">{total.B.toLocaleString()}표</span>
+
+                        <div className="text-gray-300 font-light text-2xl hidden md:block">VS</div>
+
+                        {/* Option B */}
+                        <div className="flex-1 w-full">
+                            <div className="flex justify-between items-end mb-3">
+                                <span className="text-lg font-bold text-gray-900">{topic.option_b}</span>
+                                <div className="text-right">
+                                    <span className="text-3xl font-extrabold text-red-600">{percentB}%</span>
+                                    <span className="text-sm text-gray-400 ml-2 font-medium">{total.B.toLocaleString()}</span>
+                                </div>
                             </div>
-                            <div className="h-8 bg-gray-200 rounded-full overflow-hidden">
-                                <div className="h-full bg-red-500 transition-all duration-500" style={{ width: `${percentB}%` }}></div>
+                            <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-red-500 rounded-full shadow-[0_0_10px_rgba(239,68,68,0.3)] transition-all duration-1000 ease-out"
+                                    style={{ width: `${percentB}%` }}
+                                ></div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Korea Map */}
-                <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-                    <h2 className="text-2xl font-bold mb-4">지역별 투표 현황</h2>
-                    <div className="mb-4 flex items-center gap-4 text-sm">
-                        <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 bg-blue-500 rounded"></div>
-                            <span>{topic.option_a} 우세</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 bg-red-500 rounded"></div>
-                            <span>{topic.option_b} 우세</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 bg-gray-300 rounded"></div>
-                            <span>투표 없음 / 동점</span>
-                        </div>
-                    </div>
-                    <div className="w-full">
-                        <KoreaMap results={by_region} topic={topic} />
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6">
-                    {/* Top Regions */}
-                    <div className="bg-white rounded-lg shadow-lg p-6">
-                        <h2 className="text-2xl font-bold mb-4 border-b pb-2">지역별 상세 통계</h2>
-                        <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                            {sortedRegions.map(({ region, A, B, total, percentA }, index) => {
-                                const aVotes = A || 0;
-                                const bVotes = B || 0;
-                                return (
-                                    <div key={region} className="p-3 border rounded-lg bg-gray-50 hover:bg-gray-100 transition">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <span className="font-semibold text-sm">{region}</span>
-                                            <span className="text-xs text-gray-500">#{index + 1}</span>
-                                        </div>
-                                        <div className="text-xs text-gray-600 mb-1">
-                                            총 {total}표
-                                        </div>
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <div className="flex-1">
-                                                <div className="text-xs text-blue-600 mb-1">
-                                                    {topic.option_a}: {aVotes}표 ({percentA.toFixed(1)}%)
-                                                </div>
-                                                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-blue-500" style={{ width: `${percentA}%` }}></div>
-                                                </div>
-                                            </div>
-                                            <div className="flex-1">
-                                                <div className="text-xs text-red-600 mb-1">
-                                                    {topic.option_b}: {bVotes}표 ({(100 - percentA).toFixed(1)}%)
-                                                </div>
-                                                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-red-500" style={{ width: `${100 - percentA}%` }}></div>
-                                                </div>
-                                            </div>
-                                        </div>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Korea Map Section */}
+                    <div className="lg:col-span-2">
+                        <div className="bg-white rounded-3xl shadow-[0_2px_15px_rgb(0,0,0,0.04)] p-1 border border-white/60">
+                            <div className="p-7 pb-2 flex justify-between items-center">
+                                <h2 className="text-xl font-bold text-gray-900">Regional Map</h2>
+                                <div className="flex gap-4 text-xs font-semibold">
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm"></div>
+                                        <span className="text-gray-600">{topic.option_a}</span>
                                     </div>
-                                );
-                            })}
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm"></div>
+                                        <span className="text-gray-600">{topic.option_b}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <KoreaMap results={by_region} topic={topic} />
+                        </div>
+                    </div>
+
+                    {/* Detailed Stats Section */}
+                    <div className="lg:col-span-1">
+                        <div className="bg-white rounded-3xl shadow-[0_2px_15px_rgb(0,0,0,0.04)] p-0 border border-white/60 overflow-hidden h-full flex flex-col">
+                            <div className="p-6 border-b border-gray-100 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
+                                <h2 className="text-xl font-bold text-gray-900">Breakdown</h2>
+                                <p className="text-xs text-gray-400 mt-1">Sorted by total vote volume</p>
+                            </div>
+                            <div className="overflow-y-auto flex-1 p-4 space-y-2 custom-scrollbar" style={{ maxHeight: '800px' }}>
+                                {sortedRegions.map(({ region, A, B, total, percentA }, index) => {
+                                    const aVotes = A || 0;
+                                    const bVotes = B || 0;
+                                    const isLeadingA = aVotes >= bVotes;
+
+                                    return (
+                                        <div key={region} className="group p-4 rounded-2xl bg-gray-50/50 hover:bg-white border border-transparent hover:border-gray-100 hover:shadow-sm transition-all duration-200">
+                                            <div className="flex justify-between items-center mb-3">
+                                                <div className="flex items-center gap-3">
+                                                    <span className={`
+                                                        flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold
+                                                        ${index < 3 ? 'bg-amber-100 text-amber-600' : 'bg-gray-200 text-gray-500'}
+                                                    `}>{index + 1}</span>
+                                                    <span className="font-bold text-gray-800">{region}</span>
+                                                </div>
+                                                <span className="text-xs font-medium text-gray-400 bg-white px-2 py-1 rounded-md border border-gray-100 shadow-sm">{total.toLocaleString()} votes</span>
+                                            </div>
+
+                                            <div className="space-y-3">
+                                                {/* Bar */}
+                                                <div className="flex h-2.5 rounded-full overflow-hidden bg-gray-200 w-full">
+                                                    <div className="bg-blue-500 h-full" style={{ width: `${percentA}%` }}></div>
+                                                    <div className="bg-red-500 h-full" style={{ width: `${100 - percentA}%` }}></div>
+                                                </div>
+
+                                                {/* Stats */}
+                                                <div className="flex justify-between text-xs font-medium">
+                                                    <div className={isLeadingA ? 'text-blue-600 font-bold' : 'text-gray-500'}>
+                                                        {percentA.toFixed(1)}%
+                                                    </div>
+                                                    <div className={!isLeadingA ? 'text-red-600 font-bold' : 'text-gray-500'}>
+                                                        {(100 - percentA).toFixed(1)}%
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -35,7 +35,7 @@ const SVG_FILE = '전국_시도_경계';
 function getDominantChoice(regionData: { A?: number; B?: number }): 'A' | 'B' | 'none' {
     const a = regionData.A || 0;
     const b = regionData.B || 0;
-    
+
     if (a === 0 && b === 0) return 'none';
     if (a > b) return 'A';
     if (b > a) return 'B';
@@ -71,8 +71,8 @@ function getRegionFileName(regionId: string): string {
 /**
  * 한국 지도 컴포넌트
  */
-export default function KoreaMap({ 
-    results, 
+export default function KoreaMap({
+    results,
     topic,
     optionAColor = '#3b82f6', // 파란색
     optionBColor = '#ef4444', // 빨간색
@@ -87,6 +87,23 @@ export default function KoreaMap({
     const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
     const [lastPinchDistance, setLastPinchDistance] = useState<number>(0);
     const [hoveredRegion, setHoveredRegion] = useState<{ name: string; x: number; y: number } | null>(null);
+
+    // Calculate votes for the hovered region
+    const { totalVotes, topVotes } = ((regionName) => {
+        if (!regionName || !results[regionName] || !topic) return { totalVotes: 0, topVotes: [] };
+
+        const regionVotes = results[regionName];
+        const aVotes = regionVotes.A || 0;
+        const bVotes = regionVotes.B || 0;
+        const total = aVotes + bVotes;
+
+        const votes = [
+            { option: 'A', label: topic.option_a, votes: aVotes },
+            { option: 'B', label: topic.option_b, votes: bVotes }
+        ].sort((a, b) => b.votes - a.votes);
+
+        return { totalVotes: total, topVotes: votes };
+    })(hoveredRegion?.name);
 
     /**
      * 투표 결과에 따라 색상을 적용합니다
@@ -142,12 +159,12 @@ export default function KoreaMap({
                 console.warn(`Failed to load ${fileName}.svg: ${response.status}`);
                 return;
             }
-            
+
             const regionSvgText = await response.text();
             const parser = new DOMParser();
             const regionDoc = parser.parseFromString(regionSvgText, 'image/svg+xml');
             const regionSvg = regionDoc.querySelector('svg');
-            
+
             if (!regionSvg) return;
 
             // 전국 시도 경계에서 해당 시도 path 찾기
@@ -156,14 +173,14 @@ export default function KoreaMap({
 
             // 시도 path의 바운딩 박스
             const regionBBox = getPathBBox(regionPath);
-            
+
             // 시군구 경계의 모든 path 가져오기
             const districtPaths = regionSvg.querySelectorAll('path');
             if (districtPaths.length === 0) return;
-            
+
             // viewBox 가져오기 (기본값 사용)
             const viewBox = regionSvg.getAttribute('viewBox') || '0 0 800 666';
-            
+
             // 임시 SVG를 만들어서 바운딩 박스 계산
             const tempSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
             tempSvg.setAttribute('viewBox', viewBox);
@@ -172,12 +189,12 @@ export default function KoreaMap({
             tempSvg.style.width = '0';
             tempSvg.style.height = '0';
             document.body.appendChild(tempSvg);
-            
+
             const tempGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             tempSvg.appendChild(tempGroup);
-            
+
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            
+
             districtPaths.forEach((path) => {
                 const clonedPath = path.cloneNode(true) as SVGPathElement;
                 tempGroup.appendChild(clonedPath);
@@ -187,38 +204,38 @@ export default function KoreaMap({
                 maxX = Math.max(maxX, bbox.x + bbox.width);
                 maxY = Math.max(maxY, bbox.y + bbox.height);
             });
-            
+
             // 임시 SVG 제거
             document.body.removeChild(tempSvg);
-            
+
             const districtsWidth = maxX - minX;
             const districtsHeight = maxY - minY;
-            
+
             if (districtsWidth === 0 || districtsHeight === 0) return;
-            
+
             // 스케일 및 이동 계산
             const scaleX = regionBBox.width / districtsWidth;
             const scaleY = regionBBox.height / districtsHeight;
             const scale = Math.min(scaleX, scaleY);
-            
+
             const offsetX = regionBBox.x - (minX * scale);
             const offsetY = regionBBox.y - (minY * scale);
-            
+
             // 시군구 경계 path들을 그룹으로 묶어서 추가
             const districtGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             districtGroup.setAttribute('id', `${regionId}_시군구_경계`);
             districtGroup.setAttribute('transform', `translate(${offsetX}, ${offsetY}) scale(${scale})`);
-            
+
             districtPaths.forEach((path) => {
                 const clonedPath = path.cloneNode(true) as SVGPathElement;
                 districtGroup.appendChild(clonedPath);
             });
-            
+
             // 시도 path 다음에 추가 (시도 위에 오버레이)
             const mainGroup = mainSvg.querySelector('g');
             if (mainGroup) {
                 mainGroup.appendChild(districtGroup);
-                
+
                 // 시도 경계는 배경으로 유지 (투명하지 않음)
                 // 시군구 경계가 완전히 시도를 덮지 못하는 부분을 채우기 위해
                 // applyColors에서 이미 색상이 적용되었으므로 그대로 유지
@@ -284,7 +301,7 @@ export default function KoreaMap({
                 const parser = new DOMParser();
                 const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
                 const svgElement = svgDoc.querySelector('svg');
-                
+
                 if (!svgElement) {
                     setIsLoading(false);
                     return;
@@ -292,7 +309,7 @@ export default function KoreaMap({
 
                 // SVG를 컨테이너에 추가하고 반응형으로 설정
                 const clonedSvg = svgElement.cloneNode(true) as SVGElement;
-                
+
                 // SVG를 반응형으로 만들기
                 clonedSvg.removeAttribute('width');
                 clonedSvg.removeAttribute('height');
@@ -301,7 +318,7 @@ export default function KoreaMap({
                 clonedSvg.style.display = 'block';
                 clonedSvg.style.maxWidth = '100%';
                 clonedSvg.style.height = 'auto';
-                
+
                 if (svgWrapperRef.current) {
                     svgWrapperRef.current.appendChild(clonedSvg);
 
@@ -338,32 +355,46 @@ export default function KoreaMap({
     }, [applyColors, isLoading]);
 
     /**
-     * 마우스 휠로 확대/축소
+     * 마우스 휠로 확대/축소 (Non-passive listener implementation)
      */
-    const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        
-        if (!svgContainerRef.current) return;
-        
-        const rect = svgContainerRef.current.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-        
-        // 마우스 위치를 SVG 좌표계로 변환
-        const svgX = (mouseX - position.x) / scale;
-        const svgY = (mouseY - position.y) / scale;
-        
-        // 확대/축소 비율 계산
-        const delta = e.deltaY > 0 ? 0.9 : 1.1;
-        const newScale = Math.max(0.5, Math.min(5, scale * delta));
-        
-        // 마우스 위치를 중심으로 확대/축소
-        const newX = mouseX - svgX * newScale;
-        const newY = mouseY - svgY * newScale;
-        
-        setScale(newScale);
-        setPosition({ x: newX, y: newY });
-    };
+    useEffect(() => {
+        const container = svgContainerRef.current;
+        if (!container) return;
+
+        const onWheel = (e: WheelEvent) => {
+            e.preventDefault();
+
+            const rect = container.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            // 마우스 위치를 SVG 좌표계로 변환 (현재 state 사용)
+            // 주의: useEffect 의존성 때문에 scale/position이 바뀔 때마다 리스너가 재등록됨
+            // 성능 영향을 줄이기 위해 useRef로 state를 관리할 수도 있지만,
+            // 여기서는 코드 복잡도를 낮추기 위해 의존성 배열 사용
+
+            // closure 문제 해결을 위해 setState의 콜백 사용 불가 (값 계산에 필요)
+            // 따라서 단순히 의존성 배열에 scale, position을 넣음
+
+            const svgX = (mouseX - position.x) / scale;
+            const svgY = (mouseY - position.y) / scale;
+
+            const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            const newScale = Math.max(0.5, Math.min(5, scale * delta));
+
+            const newX = mouseX - svgX * newScale;
+            const newY = mouseY - svgY * newScale;
+
+            setScale(newScale);
+            setPosition({ x: newX, y: newY });
+        };
+
+        container.addEventListener('wheel', onWheel, { passive: false });
+
+        return () => {
+            container.removeEventListener('wheel', onWheel);
+        };
+    }, [scale, position]); // scale과 position이 변경될 때마다 리스너 갱신
 
     /**
      * 마우스 드래그 시작
@@ -379,7 +410,7 @@ export default function KoreaMap({
      */
     const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
         if (!isDragging) return;
-        
+
         setPosition({
             x: e.clientX - dragStart.x,
             y: e.clientY - dragStart.y
@@ -421,7 +452,7 @@ export default function KoreaMap({
      */
     const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
         e.preventDefault();
-        
+
         if (e.touches.length === 1 && isDragging) {
             // 단일 터치: 드래그
             const touch = e.touches[0];
@@ -434,28 +465,28 @@ export default function KoreaMap({
             setIsDragging(false);
             const touch1 = e.touches[0];
             const touch2 = e.touches[1];
-            
+
             const distance = Math.sqrt(
                 Math.pow(touch2.clientX - touch1.clientX, 2) +
                 Math.pow(touch2.clientY - touch1.clientY, 2)
             );
-            
+
             if (lastPinchDistance > 0) {
                 const scaleChange = distance / lastPinchDistance;
                 const newScale = Math.max(0.5, Math.min(5, scale * scaleChange));
-                
+
                 // 두 터치의 중점 계산
                 const centerX = (touch1.clientX + touch2.clientX) / 2;
                 const centerY = (touch1.clientY + touch2.clientY) / 2;
-                
+
                 if (!svgContainerRef.current) return;
                 const rect = svgContainerRef.current.getBoundingClientRect();
                 const svgX = (centerX - rect.left - position.x) / scale;
                 const svgY = (centerY - rect.top - position.y) / scale;
-                
+
                 const newX = centerX - rect.left - svgX * newScale;
                 const newY = centerY - rect.top - svgY * newScale;
-                
+
                 setScale(newScale);
                 setPosition({ x: newX, y: newY });
             }
@@ -518,48 +549,44 @@ export default function KoreaMap({
     };
 
     /**
-     * 지역의 투표 결과를 정렬하여 상위 3개를 반환합니다
+     * 확대 버튼 클릭
      */
-    const getTopVotes = (regionName: string): Array<{ option: string; votes: number; label: string }> => {
-        const regionData = results[regionName] || {};
-        const votes = [
-            { option: 'A', votes: regionData.A || 0, label: topic?.option_a || '옵션 A' },
-            { option: 'B', votes: regionData.B || 0, label: topic?.option_b || '옵션 B' },
-        ];
-
-        return votes
-            .sort((a, b) => b.votes - a.votes)
-            .slice(0, 3)
-            .filter(v => v.votes > 0);
+    const handleZoomIn = () => {
+        const newScale = Math.min(5, scale * 1.2);
+        setScale(newScale);
     };
 
-    const topVotes = hoveredRegion ? getTopVotes(hoveredRegion.name) : [];
-    const regionData = hoveredRegion ? results[hoveredRegion.name] : null;
-    const totalVotes = regionData ? (regionData.A || 0) + (regionData.B || 0) : 0;
+    /**
+     * 축소 버튼 클릭
+     */
+    const handleZoomOut = () => {
+        const newScale = Math.max(0.5, scale / 1.2);
+        setScale(newScale);
+    };
 
     return (
-        <div className="w-full bg-white rounded-lg shadow-lg p-4 relative">
+        <div className="w-full bg-white/80 backdrop-blur-md rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/20 p-6 relative overflow-hidden transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)]">
             {isLoading && (
-                <div className="flex items-center justify-center" style={{ minHeight: '500px' }}>
+                <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm z-10 rounded-3xl">
                     <div className="text-center">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                        <p className="text-gray-600">지도를 불러오는 중...</p>
+                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-800 mx-auto mb-4"></div>
+                        <p className="text-sm font-medium text-gray-500">Loading Map...</p>
                     </div>
                 </div>
             )}
-            <div 
-                ref={svgContainerRef} 
-                className="w-full overflow-hidden relative"
-                style={{ 
-                    display: isLoading ? 'none' : 'block',
-                    aspectRatio: '800 / 759', // 원본 SVG의 비율 유지
+
+            <div
+                ref={svgContainerRef}
+                className="w-full overflow-hidden relative rounded-2xl bg-gray-50/50"
+                style={{
+                    // isLoading일 때도 공간을 차지하도록 변경하여 레이아웃 시프트 방지
+                    aspectRatio: '800 / 759',
                     maxWidth: '100%',
                     height: 'auto',
                     cursor: isDragging ? 'grabbing' : 'grab',
                     touchAction: 'none',
                     userSelect: 'none'
                 }}
-                onWheel={handleWheel}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
@@ -574,45 +601,70 @@ export default function KoreaMap({
                     style={{
                         transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
                         transformOrigin: '0 0',
-                        transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+                        transition: isDragging ? 'none' : 'transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)', // 부드러운 전환
                         width: '100%',
                         height: '100%'
                     }}
                 />
             </div>
 
+            {/* Zoom Controls */}
+            <div className="absolute bottom-6 right-6 flex flex-col gap-2 z-10">
+                <button
+                    onClick={handleZoomIn}
+                    className="w-10 h-10 flex items-center justify-center bg-white rounded-full shadow-lg border border-gray-100 text-gray-700 hover:bg-gray-50 active:scale-95 transition-all duration-200"
+                    aria-label="Zoom In"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </button>
+                <button
+                    onClick={handleZoomOut}
+                    className="w-10 h-10 flex items-center justify-center bg-white rounded-full shadow-lg border border-gray-100 text-gray-700 hover:bg-gray-50 active:scale-95 transition-all duration-200"
+                    aria-label="Zoom Out"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </button>
+            </div>
+
             {/* 팝업 */}
             {hoveredRegion && !isDragging && topic && (
                 <div
-                    className="fixed bg-white rounded-lg shadow-xl border border-gray-200 p-4 z-50 pointer-events-none min-w-[250px] max-w-[300px]"
+                    className="fixed bg-white/90 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/20 p-4 z-50 pointer-events-none min-w-[240px]"
                     style={{
-                        left: `${Math.min(hoveredRegion.x + 15, window.innerWidth - 320)}px`,
-                        top: `${Math.max(10, hoveredRegion.y - 10)}px`,
+                        left: `${Math.min(hoveredRegion.x + 20, window.innerWidth - 280)}px`,
+                        top: `${Math.max(20, hoveredRegion.y - 20)}px`,
                     }}
                 >
-                    <div className="mb-3">
-                        <h3 className="font-bold text-lg text-gray-800 mb-1">{hoveredRegion.name}</h3>
-                        <p className="text-sm text-gray-600">{topic.title}</p>
+                    <div className="mb-4 pb-3 border-b border-gray-100">
+                        <h3 className="font-bold text-lg text-gray-900 leading-tight">{hoveredRegion.name}</h3>
+                        <p className="text-xs text-gray-500 mt-1 font-medium">{topic.title}</p>
                     </div>
-                    
+
                     {totalVotes > 0 ? (
-                        <div className="space-y-2">
-                            <div className="text-xs text-gray-500 mb-2">투표 수 상위 3개</div>
+                        <div className="space-y-3">
+                            <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Top Choices</div>
                             {topVotes.map((vote, index) => (
-                                <div key={vote.option} className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs font-semibold text-gray-400">#{index + 1}</span>
+                                <div key={vote.option} className="flex items-center justify-between group">
+                                    <div className="flex items-center gap-3">
+                                        <span className={`
+                                            flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold
+                                            ${index === 0 ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}
+                                        `}>
+                                            {index + 1}
+                                        </span>
                                         <span className="text-sm font-medium text-gray-700">{vote.label}</span>
                                     </div>
-                                    <span className="text-sm font-bold text-gray-900">{vote.votes.toLocaleString()}표</span>
+                                    <span className="text-sm font-bold text-gray-900 font-numeric tabular-nums">{vote.votes.toLocaleString()}</span>
                                 </div>
                             ))}
-                            {topVotes.length === 0 && (
-                                <div className="text-sm text-gray-500">투표 데이터가 없습니다</div>
-                            )}
                         </div>
                     ) : (
-                        <div className="text-sm text-gray-500">아직 투표가 없습니다</div>
+                        <div className="text-sm text-gray-400 py-2 text-center italic">No votes yet</div>
                     )}
                 </div>
             )}

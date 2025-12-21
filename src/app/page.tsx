@@ -58,36 +58,73 @@ export default function HomePage() {
   }, []);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-gray-100 p-8">
-      <header className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center bg-white shadow-sm">
-        <h1 className="text-2xl font-bold text-blue-600">VOTEMAP.LIVE</h1>
+    <main className="flex min-h-screen flex-col items-center justify-center bg-[#F5F5F7] p-8 font-sans selection:bg-blue-100 selection:text-blue-900">
+      {/* Header */}
+      <header className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-10">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-sm">V</div>
+          <span className="text-xl font-bold tracking-tight text-gray-900">VOTEMAP</span>
+        </div>
       </header>
 
-      <div className="w-full max-w-2xl rounded-lg bg-white p-8 text-center shadow-lg">
-        <h2 className="mb-6 text-4xl font-bold text-gray-800">투표할 주제를 선택하세요</h2>
-        {loading && <p className="text-xl">주제를 불러오는 중...</p>}
-        {error && <p className="text-xl text-red-500">{error}</p>}
-        {!loading && !error && (
-          <div className="space-y-4">
-            {topics.map((topic) => (
-              <div
-                key={topic.id}
-                className="rounded-md border p-4 text-left transition hover:bg-gray-50 cursor-pointer"
-                onClick={() => router.push(`/vote/${topic.id}`)}
-              >
-                <h3 className="text-2xl font-bold text-gray-800">{topic.title}</h3>
+      <div className="w-full max-w-4xl flex flex-col items-center">
+        {/* Hero Section */}
+        <div className="text-center mb-16 space-y-4 animate-fade-in-up">
+          <h2 className="text-5xl md:text-6xl font-bold text-gray-900 tracking-tight leading-tight">
+            대한민국의<br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">여론 지형</span>을 확인하세요
+          </h2>
+          <p className="text-xl text-gray-500 font-medium max-w-2xl mx-auto">
+            실시간으로 집계되는 지역별 투표 현황을 아름다운 지도 위에서 확인해보세요.
+          </p>
+        </div>
+
+        {/* Topics Grid */}
+        <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {loading && (
+            <div className="col-span-full py-20 text-center">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900 mx-auto mb-4"></div>
+              <p className="text-gray-500 font-medium">Loading Topics...</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="col-span-full p-6 bg-red-50 rounded-2xl border border-red-100 text-center text-red-600">
+              {error}
+            </div>
+          )}
+
+          {!loading && !error && topics.map((topic) => (
+            <div
+              key={topic.id}
+              className="group relative bg-white rounded-3xl p-8 shadow-[0_2px_15px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 hover:-translate-y-1 cursor-pointer border border-white/50"
+              onClick={() => router.push(`/vote/${topic.id}`)}
+            >
+              <div className="absolute top-6 right-6 w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">{topic.title}</h3>
+              <p className="text-gray-500 text-sm font-medium mb-6">지금 바로 참여하여 의견을 남기세요.</p>
+
+              <div className="flex items-center gap-2 text-sm font-semibold text-blue-600 bg-blue-50 px-4 py-2 rounded-full w-fit group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
+                투표하기
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:translate-x-1 transition-transform">
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                  <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          ))}
+        </div>
+
         {!loading && !error && topics.length === 0 && (
-          <p className="text-xl">진행 중인 주제가 없습니다.</p>
+          <div className="w-full bg-white rounded-3xl p-12 text-center text-gray-500 shadow-sm border border-gray-100">
+            진행 중인 투표 주제가 없습니다.
+          </div>
         )}
       </div>
 
-      <div className="mt-4 text-center text-sm text-gray-500">
-        <p>실시간 한국 여론 지형 지도</p>
-      </div>
+      <footer className="mt-20 text-center text-sm font-medium text-gray-400">
+        <p>&copy; 2025 VOTEMAP. Designed for simplicity.</p>
+      </footer>
     </main>
   );
 }
