@@ -154,9 +154,10 @@ export default function KoreaMap({
             if (!fileName) return;
 
             // 시군구 경계 SVG 로드
-            const response = await fetch(`/maps-1.0.1/svg/simple/${fileName}.svg`);
+            const url = `/maps-1.0.1/svg/simple/${fileName}.svg`;
+            const response = await fetch(url);
             if (!response.ok) {
-                console.warn(`Failed to load ${fileName}.svg: ${response.status}`);
+                console.error(`Failed to load ${fileName}.svg: ${response.status} ${response.statusText}. URL: ${url}`);
                 return;
             }
 
@@ -236,9 +237,11 @@ export default function KoreaMap({
             if (mainGroup) {
                 mainGroup.appendChild(districtGroup);
 
-                // 시도 경계는 배경으로 유지 (투명하지 않음)
-                // 시군구 경계가 완전히 시도를 덮지 못하는 부분을 채우기 위해
-                // applyColors에서 이미 색상이 적용되었으므로 그대로 유지
+                // 시도 경계 path에 pointer-events: none 설정 (시군구 경계가 마우스 이벤트를 받도록)
+                const regionPath = mainSvg.querySelector(`path[id="${regionId}"]`) as SVGPathElement;
+                if (regionPath) {
+                    regionPath.style.pointerEvents = 'none';
+                }
             }
         } catch (error) {
             console.error(`Failed to load ${regionId} districts:`, error);
@@ -270,7 +273,20 @@ export default function KoreaMap({
         ];
 
         // 모든 시도를 병렬로 로드
-        await Promise.all(regions.map(regionId => overlayRegionDistricts(mainSvg, regionId)));
+        const results = await Promise.allSettled(
+            regions.map(regionId => overlayRegionDistricts(mainSvg, regionId))
+        );
+
+        // 성공/실패 로깅
+        const successCount = results.filter(r => r.status === 'fulfilled').length;
+        const failedRegions = results
+            .map((r, i) => r.status === 'rejected' ? regions[i] : null)
+            .filter(Boolean);
+
+        console.log(`시군구 경계 로드 완료: ${successCount}/${regions.length} 성공`);
+        if (failedRegions.length > 0) {
+            console.warn('시군구 경계 로드 실패:', failedRegions);
+        }
     };
 
     /**
@@ -514,8 +530,56 @@ export default function KoreaMap({
      * SVG path 요소에 마우스 이벤트를 추가합니다
      */
     const addMouseEvents = (svg: SVGElement) => {
-        const paths = svg.querySelectorAll('path');
-        paths.forEach((path) => {
+        // 먼저 시군구 경계 path에 이벤트 추가 (더 구체적인 경계)
+        const districtGroups = svg.querySelectorAll('g[id$="_시군구_경계"]');
+        districtGroups.forEach((group) => {
+            const paths = group.querySelectorAll('path');
+            paths.forEach((path) => {
+                const regionName = path.getAttribute('id');
+                if (!regionName) return;
+
+                // 마우스 진입
+                path.addEventListener('mouseenter', (e) => {
+                    if (isDragging) return;
+                    e.stopPropagation(); // 이벤트 전파 중단
+                    const mouseEvent = e as MouseEvent;
+                    setHoveredRegion({
+                        name: regionName,
+                        x: mouseEvent.clientX,
+                        y: mouseEvent.clientY
+                    });
+                });
+
+                // 마우스 이동
+                path.addEventListener('mousemove', (e) => {
+                    if (isDragging) return;
+                    e.stopPropagation(); // 이벤트 전파 중단
+                    const mouseEvent = e as MouseEvent;
+                    setHoveredRegion(prev => prev ? {
+                        ...prev,
+                        x: mouseEvent.clientX,
+                        y: mouseEvent.clientY
+                    } : null);
+                });
+
+                // 마우스 떠남
+                path.addEventListener('mouseleave', () => {
+                    setHoveredRegion(null);
+                });
+            });
+        });
+
+        // 시도 경계 path에 이벤트 추가 (시군구 경계가 없는 경우를 위해)
+        // 단, pointer-events가 none인 경우는 건너뜀
+        const allPaths = svg.querySelectorAll('path');
+        allPaths.forEach((path) => {
+            // 이미 시군구 경계 그룹에 속한 path는 건너뜀
+            if (path.closest('g[id$="_시군구_경계"]')) return;
+
+            // pointer-events가 none인 path는 건너뜀
+            const computedStyle = window.getComputedStyle(path);
+            if (computedStyle.pointerEvents === 'none') return;
+
             const regionName = path.getAttribute('id');
             if (!regionName) return;
 
