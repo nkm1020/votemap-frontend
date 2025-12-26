@@ -1,0 +1,1 @@
+http://10.1.53.39:28080/geoserver/pbps/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=pbps:DA_SIG_202406&outputFormat=SHAPE-ZIP&format_options=CHARSET:EUC-KR

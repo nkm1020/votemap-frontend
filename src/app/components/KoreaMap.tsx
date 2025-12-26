@@ -5,7 +5,8 @@
 
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 interface VoteResults {
     [region: string]: { A?: number; B?: number; };
@@ -26,8 +27,8 @@ interface KoreaMapProps {
     noVoteColor?: string;
 }
 
-// 전국 시도 경계 SVG 파일만 사용
-const SVG_FILE = '전국_시도_경계';
+// 상세 지도 SVG 파일 사용
+const SVG_FILE = 'korea-sig-2024';
 
 /**
  * 지역의 우세한 선택지를 결정합니다
@@ -40,32 +41,6 @@ function getDominantChoice(regionData: { A?: number; B?: number }): 'A' | 'B' | 
     if (a > b) return 'A';
     if (b > a) return 'B';
     return 'none'; // 동점
-}
-
-/**
- * 시도 ID를 파일명으로 변환합니다
- */
-function getRegionFileName(regionId: string): string {
-    const mapping: { [key: string]: string } = {
-        '서울특별시': '서울특별시_시군구_경계',
-        '부산광역시': '부산광역시_시군구_경계',
-        '대구광역시': '대구광역시_시군구_경계',
-        '인천광역시': '인천광역시_시군구_경계',
-        '광주광역시': '광주광역시_시군구_경계',
-        '대전광역시': '대전광역시_시군구_경계',
-        '울산광역시': '울산광역시_시군구_경계',
-        '세종특별자치시': '세종특별자치시_시군구_경계',
-        '경기도': '경기도_시군구_경계',
-        '강원도': '강원도_시군구_경계',
-        '충청북도': '충청북도_시군구_경계',
-        '충청남도': '충청남도_시군구_경계',
-        '전라북도': '전라북도_시군구_경계',
-        '전라남도': '전라남도_시군구_경계',
-        '경상북도': '경상북도_시군구_경계',
-        '경상남도': '경상남도_시군구_경계',
-        '제주특별자치도': '제주특별자치도_시군구_경계',
-    };
-    return mapping[regionId] || '';
 }
 
 /**
@@ -86,7 +61,8 @@ export default function KoreaMap({
     const [isDragging, setIsDragging] = useState<boolean>(false);
     const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
     const [lastPinchDistance, setLastPinchDistance] = useState<number>(0);
-    const [hoveredRegion, setHoveredRegion] = useState<{ name: string; x: number; y: number } | null>(null);
+    const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
+    const tooltipRef = useRef<HTMLDivElement>(null);
 
     // Calculate votes for the hovered region
     const { totalVotes, topVotes } = ((regionName) => {
@@ -103,16 +79,19 @@ export default function KoreaMap({
         ].sort((a, b) => b.votes - a.votes);
 
         return { totalVotes: total, topVotes: votes };
-    })(hoveredRegion?.name);
+    })(hoveredRegion);
 
     /**
      * 투표 결과에 따라 색상을 적용합니다
      */
     const applyColors = useCallback((svg: SVGElement) => {
-        // 모든 path에 색상 적용 (시도 경계와 시군구 경계 모두)
+        // 모든 path에 색상 적용
         const paths = svg.querySelectorAll('path');
         paths.forEach((path) => {
             const regionName = path.getAttribute('id');
+            const parentGroup = path.parentElement;
+            const parentName = parentGroup?.tagName === 'g' ? parentGroup.getAttribute('id') : null;
+
             if (!regionName) return;
 
             // 숨겨진 path는 건너뜀
@@ -120,7 +99,14 @@ export default function KoreaMap({
                 return;
             }
 
-            const regionData = results[regionName];
+            // 1. 지역(시군구) 데이터 확인
+            let regionData = results[regionName];
+
+            // 2. 없으면 상위(시도) 데이터 확인
+            if (!regionData && parentName) {
+                regionData = results[parentName];
+            }
+
             const dominant = getDominantChoice(regionData || {});
 
             let fillColor = noVoteColor;
@@ -132,161 +118,18 @@ export default function KoreaMap({
 
             path.setAttribute('fill', fillColor);
             path.setAttribute('stroke', '#ffffff');
-            path.setAttribute('stroke-width', '1');
+            path.setAttribute('stroke-width', '0.5');
+            path.setAttribute('vector-effect', 'non-scaling-stroke'); // 줌 레벨에 관계없이 두께 유지
         });
     }, [results, optionAColor, optionBColor, noVoteColor]);
 
     /**
-     * Path의 바운딩 박스를 계산합니다
+     * 유효한 지역 path인지 확인
      */
-    const getPathBBox = (path: SVGPathElement): DOMRect => {
-        const bbox = path.getBBox();
-        return bbox;
-    };
-
-
-    /**
-     * 특정 시도의 시군구 경계를 전국 시도 경계 위에 오버레이합니다
-     */
-    const overlayRegionDistricts = async (mainSvg: SVGElement, regionId: string) => {
-        try {
-            const fileName = getRegionFileName(regionId);
-            if (!fileName) return;
-
-            // 시군구 경계 SVG 로드
-            const url = `/maps-1.0.1/svg/simple/${fileName}.svg`;
-            const response = await fetch(url);
-            if (!response.ok) {
-                console.error(`Failed to load ${fileName}.svg: ${response.status} ${response.statusText}. URL: ${url}`);
-                return;
-            }
-
-            const regionSvgText = await response.text();
-            const parser = new DOMParser();
-            const regionDoc = parser.parseFromString(regionSvgText, 'image/svg+xml');
-            const regionSvg = regionDoc.querySelector('svg');
-
-            if (!regionSvg) return;
-
-            // 전국 시도 경계에서 해당 시도 path 찾기
-            const regionPath = mainSvg.querySelector(`path[id="${regionId}"]`) as SVGPathElement;
-            if (!regionPath) return;
-
-            // 시도 path의 바운딩 박스
-            const regionBBox = getPathBBox(regionPath);
-
-            // 시군구 경계의 모든 path 가져오기
-            const districtPaths = regionSvg.querySelectorAll('path');
-            if (districtPaths.length === 0) return;
-
-            // viewBox 가져오기 (기본값 사용)
-            const viewBox = regionSvg.getAttribute('viewBox') || '0 0 800 666';
-
-            // 임시 SVG를 만들어서 바운딩 박스 계산
-            const tempSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            tempSvg.setAttribute('viewBox', viewBox);
-            tempSvg.style.position = 'absolute';
-            tempSvg.style.visibility = 'hidden';
-            tempSvg.style.width = '0';
-            tempSvg.style.height = '0';
-            document.body.appendChild(tempSvg);
-
-            const tempGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-            tempSvg.appendChild(tempGroup);
-
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-
-            districtPaths.forEach((path) => {
-                const clonedPath = path.cloneNode(true) as SVGPathElement;
-                tempGroup.appendChild(clonedPath);
-                const bbox = clonedPath.getBBox();
-                minX = Math.min(minX, bbox.x);
-                minY = Math.min(minY, bbox.y);
-                maxX = Math.max(maxX, bbox.x + bbox.width);
-                maxY = Math.max(maxY, bbox.y + bbox.height);
-            });
-
-            // 임시 SVG 제거
-            document.body.removeChild(tempSvg);
-
-            const districtsWidth = maxX - minX;
-            const districtsHeight = maxY - minY;
-
-            if (districtsWidth === 0 || districtsHeight === 0) return;
-
-            // 스케일 및 이동 계산
-            const scaleX = regionBBox.width / districtsWidth;
-            const scaleY = regionBBox.height / districtsHeight;
-            const scale = Math.min(scaleX, scaleY);
-
-            const offsetX = regionBBox.x - (minX * scale);
-            const offsetY = regionBBox.y - (minY * scale);
-
-            // 시군구 경계 path들을 그룹으로 묶어서 추가
-            const districtGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-            districtGroup.setAttribute('id', `${regionId}_시군구_경계`);
-            districtGroup.setAttribute('transform', `translate(${offsetX}, ${offsetY}) scale(${scale})`);
-
-            districtPaths.forEach((path) => {
-                const clonedPath = path.cloneNode(true) as SVGPathElement;
-                districtGroup.appendChild(clonedPath);
-            });
-
-            // 시도 path 다음에 추가 (시도 위에 오버레이)
-            const mainGroup = mainSvg.querySelector('g');
-            if (mainGroup) {
-                mainGroup.appendChild(districtGroup);
-
-                // 시도 경계 path에 pointer-events: none 설정 (시군구 경계가 마우스 이벤트를 받도록)
-                const regionPath = mainSvg.querySelector(`path[id="${regionId}"]`) as SVGPathElement;
-                if (regionPath) {
-                    regionPath.style.pointerEvents = 'none';
-                }
-            }
-        } catch (error) {
-            console.error(`Failed to load ${regionId} districts:`, error);
-        }
-    };
-
-    /**
-     * 모든 시도의 시군구 경계를 오버레이합니다
-     */
-    const overlayAllDistricts = async (mainSvg: SVGElement) => {
-        const regions = [
-            '서울특별시',
-            '부산광역시',
-            '대구광역시',
-            '인천광역시',
-            '광주광역시',
-            '대전광역시',
-            '울산광역시',
-            '세종특별자치시',
-            '경기도',
-            '강원도',
-            '충청북도',
-            '충청남도',
-            '전라북도',
-            '전라남도',
-            '경상북도',
-            '경상남도',
-            '제주특별자치도',
-        ];
-
-        // 모든 시도를 병렬로 로드
-        const results = await Promise.allSettled(
-            regions.map(regionId => overlayRegionDistricts(mainSvg, regionId))
-        );
-
-        // 성공/실패 로깅
-        const successCount = results.filter(r => r.status === 'fulfilled').length;
-        const failedRegions = results
-            .map((r, i) => r.status === 'rejected' ? regions[i] : null)
-            .filter(Boolean);
-
-        console.log(`시군구 경계 로드 완료: ${successCount}/${regions.length} 성공`);
-        if (failedRegions.length > 0) {
-            console.warn('시군구 경계 로드 실패:', failedRegions);
-        }
+    const isValidRegionPath = (path: Element): boolean => {
+        const id = path.getAttribute('id');
+        // 레이어_1 등 비지역 ID 제외
+        return !!id && !['레이어_1', 'Layer_1'].includes(id);
     };
 
     /**
@@ -300,15 +143,12 @@ export default function KoreaMap({
             return;
         }
 
-        // 기존 SVG 제거
-        svgWrapperRef.current.innerHTML = '';
         setIsLoading(true);
 
-        // 전국 시도 경계 SVG 파일 로드
-        fetch(`/maps-1.0.1/svg/simple/${SVG_FILE}.svg`)
+        // 상세 지도 SVG 파일 로드
+        fetch(`/maps-1.0.1/${SVG_FILE}.svg`)
             .then((response) => response.text())
             .then(async (svgText) => {
-                // 이미 SVG가 추가되었는지 다시 확인
                 if (!svgWrapperRef.current || svgWrapperRef.current.querySelector('svg')) {
                     setIsLoading(false);
                     return;
@@ -319,6 +159,7 @@ export default function KoreaMap({
                 const svgElement = svgDoc.querySelector('svg');
 
                 if (!svgElement) {
+                    console.error('No SVG element found');
                     setIsLoading(false);
                     return;
                 }
@@ -330,24 +171,19 @@ export default function KoreaMap({
                 clonedSvg.removeAttribute('width');
                 clonedSvg.removeAttribute('height');
                 clonedSvg.setAttribute('width', '100%');
-                clonedSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+                clonedSvg.setAttribute('height', '100%');
                 clonedSvg.style.display = 'block';
                 clonedSvg.style.maxWidth = '100%';
-                clonedSvg.style.height = 'auto';
+                // clonedSvg.style.height = 'auto'; // height: 100%로 설정하여 컨테이너에 맞춤
 
                 if (svgWrapperRef.current) {
+                    svgWrapperRef.current.innerHTML = ''; // 안전하게 클리어
                     svgWrapperRef.current.appendChild(clonedSvg);
 
-                    // 먼저 시도 경계에 색상 적용 (배경)
-                    applyColors(clonedSvg);
-
-                    // 모든 시도의 시군구 경계 오버레이
-                    await overlayAllDistricts(clonedSvg);
-
-                    // 마우스 이벤트 추가 (오버레이 후 모든 path에 적용)
+                    // 마우스 이벤트 추가
                     addMouseEvents(clonedSvg);
 
-                    // 오버레이 후 다시 색상 적용 (시군구 경계에도 색상 적용)
+                    // 색상 적용
                     applyColors(clonedSvg);
                 }
                 setIsLoading(false);
@@ -356,7 +192,7 @@ export default function KoreaMap({
                 console.error(`Failed to load ${SVG_FILE}.svg:`, error);
                 setIsLoading(false);
             });
-    }, []); // 빈 의존성 배열로 한 번만 실행
+    }, []);
 
     /**
      * 투표 결과에 따라 색상을 업데이트합니다
@@ -529,6 +365,9 @@ export default function KoreaMap({
     /**
      * SVG path 요소에 마우스 이벤트를 추가합니다
      */
+    /**
+     * SVG path 요소에 마우스 이벤트를 추가합니다
+     */
     const addMouseEvents = (svg: SVGElement) => {
         // 먼저 시군구 경계 path에 이벤트 추가 (더 구체적인 경계)
         const districtGroups = svg.querySelectorAll('g[id$="_시군구_경계"]');
@@ -539,38 +378,30 @@ export default function KoreaMap({
                 if (!regionName) return;
 
                 // 마우스 진입
-                path.addEventListener('mouseenter', (e) => {
+                path.addEventListener('mouseenter', (e: MouseEvent) => {
                     if (isDragging) return;
                     e.stopPropagation(); // 이벤트 전파 중단
-                    const mouseEvent = e as MouseEvent;
-                    setHoveredRegion({
-                        name: regionName,
-                        x: mouseEvent.clientX,
-                        y: mouseEvent.clientY
-                    });
-                });
 
-                // 마우스 이동
-                path.addEventListener('mousemove', (e) => {
-                    if (isDragging) return;
-                    e.stopPropagation(); // 이벤트 전파 중단
-                    const mouseEvent = e as MouseEvent;
-                    setHoveredRegion(prev => prev ? {
-                        ...prev,
-                        x: mouseEvent.clientX,
-                        y: mouseEvent.clientY
-                    } : null);
+                    // 마우스 위치 즉시 저장 (툴팁 초기 위치 보장)
+                    lastMousePos.current = { x: e.clientX, y: e.clientY };
+
+                    // 스타일 적용 (어둡게 만들기)
+                    path.style.filter = 'brightness(0.8)';
+                    path.style.transition = 'filter 0.2s ease';
+
+                    setHoveredRegion(regionName);
                 });
 
                 // 마우스 떠남
                 path.addEventListener('mouseleave', () => {
+                    path.style.filter = '';
                     setHoveredRegion(null);
                 });
             });
         });
 
         // 시도 경계 path에 이벤트 추가 (시군구 경계가 없는 경우를 위해)
-        // 단, pointer-events가 none인 경우는 건너뜀
+        // 단, pointer-events가 none인 경우는 건너뛰고, 이미 시군구 경계에 속한 path도 건너뜀
         const allPaths = svg.querySelectorAll('path');
         allPaths.forEach((path) => {
             // 이미 시군구 경계 그룹에 속한 path는 건너뜀
@@ -584,33 +415,31 @@ export default function KoreaMap({
             if (!regionName) return;
 
             // 마우스 진입
-            path.addEventListener('mouseenter', (e) => {
+            path.addEventListener('mouseenter', (e: MouseEvent) => {
                 if (isDragging) return;
-                const mouseEvent = e as MouseEvent;
-                setHoveredRegion({
-                    name: regionName,
-                    x: mouseEvent.clientX,
-                    y: mouseEvent.clientY
-                });
-            });
 
-            // 마우스 이동
-            path.addEventListener('mousemove', (e) => {
-                if (isDragging) return;
-                const mouseEvent = e as MouseEvent;
-                setHoveredRegion(prev => prev ? {
-                    ...prev,
-                    x: mouseEvent.clientX,
-                    y: mouseEvent.clientY
-                } : null);
+                // 마우스 위치 즉시 저장
+                lastMousePos.current = { x: e.clientX, y: e.clientY };
+
+                // 스타일 적용 (어둡게 만들기)
+                path.style.filter = 'brightness(0.8)';
+                path.style.transition = 'filter 0.2s ease';
+
+                setHoveredRegion(regionName);
             });
 
             // 마우스 떠남
             path.addEventListener('mouseleave', () => {
+                path.style.filter = '';
                 setHoveredRegion(null);
             });
         });
     };
+
+    /**
+     * tooltip 위치 업데이트 (zoom/pan 시에도 위치 유지) - 삭제됨 (마우스 추적으로 변경)
+     */
+    // useLayoutEffect 제거
 
     /**
      * 확대 버튼 클릭
@@ -627,6 +456,44 @@ export default function KoreaMap({
         const newScale = Math.max(0.5, scale / 1.2);
         setScale(newScale);
     };
+
+    const lastMousePos = useRef<{ x: number; y: number } | null>(null);
+
+    /**
+     * 툴팁 위치 업데이트 함수
+     */
+    const updateTooltipPosition = (x: number, y: number) => {
+        if (!tooltipRef.current) return;
+
+        const TOOLTIP_OFFSET = 20;
+        const tooltipWidth = tooltipRef.current.offsetWidth || 240;
+        const tooltipHeight = tooltipRef.current.offsetHeight || 120;
+
+        let left = x + TOOLTIP_OFFSET;
+        let top = y + TOOLTIP_OFFSET;
+
+        // 화면 오른쪽을 벗어나면 왼쪽으로 이동
+        if (left + tooltipWidth > window.innerWidth) {
+            left = x - tooltipWidth - TOOLTIP_OFFSET;
+        }
+
+        // 화면 아래쪽을 벗어나면 위쪽으로 이동
+        if (top + tooltipHeight > window.innerHeight) {
+            top = y - tooltipHeight - TOOLTIP_OFFSET;
+        }
+
+        tooltipRef.current.style.left = `${left}px`;
+        tooltipRef.current.style.top = `${top}px`;
+    };
+
+    /**
+     * 툴팁이 나타날 때 초기 위치 설정
+     */
+    useLayoutEffect(() => {
+        if (hoveredRegion && lastMousePos.current) {
+            updateTooltipPosition(lastMousePos.current.x, lastMousePos.current.y);
+        }
+    }, [hoveredRegion]);
 
     return (
         <div className="w-full bg-white/80 backdrop-blur-md rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/20 p-6 relative overflow-hidden transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)]">
@@ -652,9 +519,22 @@ export default function KoreaMap({
                     userSelect: 'none'
                 }}
                 onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
+                onMouseMove={(e) => {
+                    handleMouseMove(e);
+
+                    // 마우스 위치 저장
+                    lastMousePos.current = { x: e.clientX, y: e.clientY };
+
+                    // 툴팁 위치 업데이트 (마우스 추적)
+                    if (hoveredRegion && tooltipRef.current) {
+                        updateTooltipPosition(e.clientX, e.clientY);
+                    }
+                }}
                 onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
+                onMouseLeave={(e) => {
+                    handleMouseUp();
+                    // 툴팁 숨김 등 추가 처리가 필요하다면 여기에 작성
+                }}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
@@ -695,42 +575,47 @@ export default function KoreaMap({
                 </button>
             </div>
 
-            {/* 팝업 */}
+            {/* 팝업 (Portal 사용) */}
             {hoveredRegion && !isDragging && topic && (
-                <div
-                    className="fixed bg-white/90 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/20 p-4 z-50 pointer-events-none min-w-[240px]"
-                    style={{
-                        left: `${Math.min(hoveredRegion.x + 20, window.innerWidth - 280)}px`,
-                        top: `${Math.max(20, hoveredRegion.y - 20)}px`,
-                    }}
-                >
-                    <div className="mb-4 pb-3 border-b border-gray-100">
-                        <h3 className="font-bold text-lg text-gray-900 leading-tight">{hoveredRegion.name}</h3>
-                        <p className="text-xs text-gray-500 mt-1 font-medium">{topic.title}</p>
-                    </div>
-
-                    {totalVotes > 0 ? (
-                        <div className="space-y-3">
-                            <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Top Choices</div>
-                            {topVotes.map((vote, index) => (
-                                <div key={vote.option} className="flex items-center justify-between group">
-                                    <div className="flex items-center gap-3">
-                                        <span className={`
-                                            flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold
-                                            ${index === 0 ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}
-                                        `}>
-                                            {index + 1}
-                                        </span>
-                                        <span className="text-sm font-medium text-gray-700">{vote.label}</span>
-                                    </div>
-                                    <span className="text-sm font-bold text-gray-900 font-numeric tabular-nums">{vote.votes.toLocaleString()}</span>
-                                </div>
-                            ))}
+                typeof document !== 'undefined' && createPortal(
+                    <div
+                        ref={tooltipRef}
+                        className="fixed bg-white/90 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/20 p-4 z-[9999] pointer-events-none min-w-[240px]"
+                        style={{
+                            // 초기 위치는 hidden으로 두거나, layoutEffect에서 설정하므로 비워둠
+                            left: lastMousePos.current ? lastMousePos.current.x + 20 : 0,
+                            top: lastMousePos.current ? lastMousePos.current.y + 20 : 0,
+                        }}
+                    >
+                        <div className="mb-4 pb-3 border-b border-gray-100">
+                            <h3 className="font-bold text-lg text-gray-900 leading-tight">{hoveredRegion}</h3>
+                            <p className="text-xs text-gray-500 mt-1 font-medium">{topic.title}</p>
                         </div>
-                    ) : (
-                        <div className="text-sm text-gray-400 py-2 text-center italic">No votes yet</div>
-                    )}
-                </div>
+
+                        {totalVotes > 0 ? (
+                            <div className="space-y-3">
+                                <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Top Choices</div>
+                                {topVotes.map((vote, index) => (
+                                    <div key={vote.option} className="flex items-center justify-between group">
+                                        <div className="flex items-center gap-3">
+                                            <span className={`
+                                                flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold
+                                                ${index === 0 ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}
+                                            `}>
+                                                {index + 1}
+                                            </span>
+                                            <span className="text-sm font-medium text-gray-700">{vote.label}</span>
+                                        </div>
+                                        <span className="text-sm font-bold text-gray-900 font-numeric tabular-nums">{vote.votes.toLocaleString()}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-sm text-gray-400 py-2 text-center italic">No votes yet</div>
+                        )}
+                    </div>,
+                    document.body
+                )
             )}
         </div>
     );
