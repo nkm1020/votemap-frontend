@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { getApiUrl } from './lib/api';
+import { useGeolocation } from './hooks/useGeolocation';
 
 /**
  * 투표 주제 정보 인터페이스
@@ -28,6 +29,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const { location, loading: geoLoading, error: geoError } = useGeolocation();
 
   /**
    * 컴포넌트 마운트 시 백엔드에서 투표 주제 목록을 불러옵니다.
@@ -57,6 +59,22 @@ export default function HomePage() {
     fetchData();
   }, []);
 
+  const handleTopicClick = (topicId: number) => {
+    if (location && location.region1) {
+      // 위치 정보가 있으면 바로 해당 지역 투표 페이지로 이동
+      const params = new URLSearchParams();
+      params.set('province', location.region1);
+      if (location.region2) {
+        params.set('district', location.region2);
+      }
+      params.set('auto', 'true');
+      router.push(`/vote/${topicId}?${params.toString()}`);
+    } else {
+      // 없으면 일반 선택 페이지로 이동
+      router.push(`/vote/${topicId}`);
+    }
+  };
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-[#F5F5F7] p-8 font-sans selection:bg-blue-100 selection:text-blue-900">
       {/* Header */}
@@ -77,6 +95,25 @@ export default function HomePage() {
           <p className="text-xl text-gray-500 font-medium max-w-2xl mx-auto">
             실시간으로 집계되는 지역별 투표 현황을 아름다운 지도 위에서 확인해보세요.
           </p>
+
+          {/* Location Status Badge */}
+          <div className="h-8 flex items-center justify-center">
+            {geoLoading ? (
+              <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-3 py-1 rounded-full animate-pulse flex items-center gap-2">
+                <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
+                위치 확인 중...
+              </span>
+            ) : location ? (
+              <span className="text-xs font-semibold text-green-600 bg-green-50 px-3 py-1 rounded-full border border-green-100 flex items-center gap-2">
+                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                {location.region1} {location.region2} 감지됨 ({location.source.toUpperCase()})
+              </span>
+            ) : (
+              <span className="text-xs font-semibold text-gray-400 bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
+                위치 정보를 사용할 수 없습니다
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Topics Grid */}
@@ -98,14 +135,14 @@ export default function HomePage() {
             <div
               key={topic.id}
               className="group relative bg-white rounded-3xl p-8 shadow-[0_2px_15px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 hover:-translate-y-1 cursor-pointer border border-white/50"
-              onClick={() => router.push(`/vote/${topic.id}`)}
+              onClick={() => handleTopicClick(topic.id)}
             >
               <div className="absolute top-6 right-6 w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
               <h3 className="text-2xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">{topic.title}</h3>
               <p className="text-gray-500 text-sm font-medium mb-6">지금 바로 참여하여 의견을 남기세요.</p>
 
               <div className="flex items-center gap-2 text-sm font-semibold text-blue-600 bg-blue-50 px-4 py-2 rounded-full w-fit group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
-                투표하기
+                {location ? '내 지역에서 투표하기' : '투표하기'}
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:translate-x-1 transition-transform">
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                   <polyline points="12 5 19 12 12 19"></polyline>

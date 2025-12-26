@@ -10,6 +10,7 @@ import axios from 'axios';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
 import KoreaMap from '../components/KoreaMap';
+import UserProfile from '../components/UserProfile';
 import { getApiUrl, getSocketUrl } from '../lib/api';
 
 /**
@@ -205,6 +206,9 @@ function ResultsPageContent() {
             </header>
 
             <div className="max-w-7xl mx-auto p-6 lg:p-10 space-y-8">
+                {/* User Profile Stats */}
+                <UserProfile />
+
                 {/* Nationwide Results Widget */}
                 <div className="bg-white rounded-3xl shadow-[0_2px_15px_rgb(0,0,0,0.04)] p-8 border border-white/60">
                     <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">

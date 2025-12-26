@@ -25,22 +25,25 @@ interface KoreaMapProps {
     optionAColor?: string;
     optionBColor?: string;
     noVoteColor?: string;
+    drawColor?: string;
 }
 
 // 상세 지도 SVG 파일 사용
 const SVG_FILE = 'korea-sig-2024';
 
+
+
 /**
  * 지역의 우세한 선택지를 결정합니다
  */
-function getDominantChoice(regionData: { A?: number; B?: number }): 'A' | 'B' | 'none' {
+function getDominantChoice(regionData: { A?: number; B?: number }): 'A' | 'B' | 'draw' | 'none' {
     const a = regionData.A || 0;
     const b = regionData.B || 0;
 
     if (a === 0 && b === 0) return 'none';
     if (a > b) return 'A';
     if (b > a) return 'B';
-    return 'none'; // 동점
+    return 'draw'; // 동점
 }
 
 /**
@@ -51,7 +54,8 @@ export default function KoreaMap({
     topic,
     optionAColor = '#3b82f6', // 파란색
     optionBColor = '#ef4444', // 빨간색
-    noVoteColor = '#e5e7eb' // 회색
+    noVoteColor = '#e5e7eb', // 회색
+    drawColor = '#8b5cf6' // 보라색 (동점)
 }: KoreaMapProps) {
     const svgContainerRef = useRef<HTMLDivElement>(null);
     const svgWrapperRef = useRef<HTMLDivElement>(null);
@@ -66,9 +70,23 @@ export default function KoreaMap({
 
     // Calculate votes for the hovered region
     const { totalVotes, topVotes } = ((regionName) => {
-        if (!regionName || !results[regionName] || !topic) return { totalVotes: 0, topVotes: [] };
+        if (!regionName) return { totalVotes: 0, topVotes: [] };
 
-        const regionVotes = results[regionName];
+        let regionVotes = results[regionName];
+
+        // If direct match fails, try matching the last part of the region name
+        // (e.g. SVG has "고양시 일산동구" but results have "일산동구")
+        if (!regionVotes && regionName.includes(' ')) {
+            const shortName = regionName.split(' ').pop();
+            if (shortName) {
+                regionVotes = results[shortName];
+            }
+        }
+
+
+
+        if (!regionVotes || !topic) return { totalVotes: 0, topVotes: [] };
+
         const aVotes = regionVotes.A || 0;
         const bVotes = regionVotes.B || 0;
         const total = aVotes + bVotes;
@@ -102,7 +120,17 @@ export default function KoreaMap({
             // 1. 지역(시군구) 데이터 확인
             let regionData = results[regionName];
 
-            // 2. 없으면 상위(시도) 데이터 확인
+            // 2. 일치하는 데이터가 없고 공백이 포함된 경우 (예: "고양시 일산동구"), 뒷부분("일산동구")으로 재탐색
+            if (!regionData && regionName.includes(' ')) {
+                const shortName = regionName.split(' ').pop();
+                if (shortName) {
+                    regionData = results[shortName];
+                }
+            }
+
+
+
+            // 3. 그래도 없으면 상위(시도) 데이터 확인
             if (!regionData && parentName) {
                 regionData = results[parentName];
             }
@@ -114,6 +142,8 @@ export default function KoreaMap({
                 fillColor = optionAColor;
             } else if (dominant === 'B') {
                 fillColor = optionBColor;
+            } else if (dominant === 'draw') {
+                fillColor = drawColor;
             }
 
             path.setAttribute('fill', fillColor);
@@ -121,7 +151,7 @@ export default function KoreaMap({
             path.setAttribute('stroke-width', '0.5');
             path.setAttribute('vector-effect', 'non-scaling-stroke'); // 줌 레벨에 관계없이 두께 유지
         });
-    }, [results, optionAColor, optionBColor, noVoteColor]);
+    }, [results, optionAColor, optionBColor, noVoteColor, drawColor]);
 
     /**
      * 유효한 지역 path인지 확인

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -28,6 +29,18 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}
+        {/* Kakao SDK Initialization */}
+        {/* <Script 
+            src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js" 
+            integrity="sha384-TiCUE00h649CAMonG018J2ujOgDKW/kVWlChEuu4jK2txfLE10q6Uy36q17JEJGN" 
+            crossOrigin="anonymous" 
+            onLoad={() => {
+                if (window.Kakao) {
+                    // [IMPORTANT] Replace with your actual Kakao JavaScript Key
+                    window.Kakao.init('YOUR_KAKAO_JAVASCRIPT_KEY_HERE'); 
+                }
+            }}
+        /> */}
       </body>
     </html>
   );
