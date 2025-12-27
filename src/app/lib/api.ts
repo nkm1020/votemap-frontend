@@ -24,17 +24,17 @@ export function getApiUrl(endpoint: string): string {
   if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
     return endpoint;
   }
-  
+
   // 상대 경로인 경우 기본 URL과 결합
   const baseUrl = API_BASE_URL.replace(/\/$/, ''); // 끝의 슬래시 제거
   const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const fullUrl = `${baseUrl}${path}`;
-  
+
   // 디버깅: 생성된 URL 확인
   if (typeof window !== 'undefined') {
     console.log('[API] Request URL:', fullUrl);
   }
-  
+
   return fullUrl;
 }
 
@@ -44,5 +44,13 @@ export function getApiUrl(endpoint: string): string {
 export function getSocketUrl(): string {
   return API_BASE_URL;
 }
+
+/**
+ * Google OAuth 인증 URL을 반환합니다.
+ */
+export function getGoogleAuthUrl(): string {
+  return `${API_BASE_URL}/auth/google`;
+}
+
 
 

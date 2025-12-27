@@ -10,6 +10,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { KOREAN_REGIONS } from '../../lib/regions';
 import { getApiUrl } from '../../lib/api';
 import { getDeviceUUID } from '../../lib/auth';
+import AuthHeader from '../../components/AuthHeader';
 
 /**
  * 투표 주제 정보 인터페이스
@@ -24,7 +25,7 @@ interface Topic {
 /**
  * 투표 상태 타입
  */
-type VoteStatus = 'idle' | 'voting' | 'voted';
+type VoteStatus = 'idle' | 'voting' | 'voted' | 'already_voted';
 
 /**
  * 투표 페이지 내부 콘텐츠
@@ -51,6 +52,29 @@ function VotePageContent() {
       try {
         const response = await axios.get(getApiUrl(`/topics/${topicId}`));
         setTopic(response.data);
+
+        // Check vote status
+        const uuid = getDeviceUUID();
+        const token = localStorage.getItem('votemap_token');
+
+        try {
+          const statusRes = await axios.get(getApiUrl(`/votes/status?topic_id=${topicId}&user_uuid=${uuid}`), {
+            headers: token ? { Authorization: `Bearer ${token}` } : {}
+          });
+
+          if (statusRes.data.hasVoted) {
+            if (!statusRes.data.canVoteAgain) {
+              // Already voted and cannot vote again -> Show message instead of redirect
+              setVoteStatus('already_voted');
+            } else {
+              // Can vote again -> Show message (Optional)
+              // We can set a state to show "Re-vote enabled"
+            }
+          }
+        } catch (e) {
+          console.error('Failed to check vote status', e);
+        }
+
       } catch (err: unknown) {
         const error = err as { code?: string; message?: string };
         if (error.code === 'ECONNREFUSED' || error.message === 'Network Error') {
@@ -65,7 +89,7 @@ function VotePageContent() {
     };
 
     fetchData();
-  }, [topicId]);
+  }, [topicId, router]);
 
   /**
    * URL 파라미터 기반 자동 선택 처리
@@ -117,22 +141,34 @@ function VotePageContent() {
 
     try {
       // Lazy Auth: Get or initiate device UUID
-      const user_uuid = getDeviceUUID(); // Requires import
+      const user_uuid = getDeviceUUID();
+      const token = localStorage.getItem('votemap_token');
 
       await axios.post(getApiUrl('/votes'), {
         topic_id: topic.id,
         choice: choice,
         region: selectedRegion,
         user_uuid: user_uuid,
+      }, {
+        // Send token if available (though backend might not enforce it, it's good practice)
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
 
       setVoteStatus('voted');
 
       setTimeout(() => {
-        router.push(`/results?topic=${topic.id}`);
+        router.replace(`/results?topic=${topic.id}`); // Use replace to prevent back button voting
       }, 1500);
 
-    } catch (err) {
+    } catch (err: any) {
+      if (err.response && (err.response.status === 400 || err.response.status === 500)) {
+        // Check message
+        if (err.response.data?.message === 'Already voted for this topic') {
+          setError('이미 참여한 투표입니다.');
+          setTimeout(() => router.replace(`/results?topic=${topic.id}`), 1000);
+          return;
+        }
+      }
       setError('투표를 기록하는 데 실패했습니다. 다시 시도해주세요.');
       setVoteStatus('idle');
       console.error(err);
@@ -146,9 +182,9 @@ function VotePageContent() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-gray-100 p-8">
-      <header className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center bg-white shadow-sm">
-        <h1 className="text-2xl font-bold text-blue-600" onClick={() => router.push('/')} style={{ cursor: 'pointer' }}>VOTEMAP.LIVE</h1>
-      </header>
+      {/* Replaced Header with AuthHeader logic? Or just use AuthHeader component if it supports absolute positioning */}
+      {/* AuthHeader is absolute by default, let's try using it */}
+      <AuthHeader />
 
       <div className="w-full max-w-2xl rounded-lg bg-white p-8 text-center shadow-lg">
         {loading && <p className="text-xl">주제를 불러오는 중...</p>}
@@ -157,6 +193,20 @@ function VotePageContent() {
           <div className="text-2xl font-bold text-green-500">
             <h2>투표해주셔서 감사합니다!</h2>
             <p className="mt-4 text-lg">잠시 후 결과 페이지로 이동합니다.</p>
+          </div>
+        ) : voteStatus === 'already_voted' ? (
+          <div className="text-center">
+            <h2 className="text-3xl font-bold text-gray-800 mb-4">이미 투표하셨습니다</h2>
+            <p className="text-gray-600 mb-8">
+              이 기기 또는 계정으로 이미 투표에 참여하셨습니다.<br />
+              결과를 확인해보세요.
+            </p>
+            <button
+              onClick={() => router.push(`/results?topic=${topicId}`)}
+              className="px-8 py-3 bg-blue-600 text-white font-bold rounded-full hover:bg-blue-700 transition-colors shadow-lg"
+            >
+              결과 보기
+            </button>
           </div>
         ) : (
           <>

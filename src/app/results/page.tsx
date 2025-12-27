@@ -12,6 +12,8 @@ import { io, Socket } from 'socket.io-client';
 import KoreaMap from '../components/KoreaMap';
 import UserProfile from '../components/UserProfile';
 import { getApiUrl, getSocketUrl } from '../lib/api';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import LoginModal from '../components/LoginModal';
 
 /**
  * 투표 결과 데이터 인터페이스
@@ -45,6 +47,9 @@ function ResultsPageContent() {
     const socketRef = useRef<Socket | null>(null);
     const router = useRouter();
     const searchParams = useSearchParams();
+
+    const { user } = useCurrentUser();
+    const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
     const topicId = searchParams?.get('topic') || '1';
 
@@ -194,7 +199,37 @@ function ResultsPageContent() {
                         </div>
                     </div>
 
-                    <div className="flex gap-3">
+                    <div className="flex gap-3 items-center">
+                        {/* User Profile or Login */}
+                        {user ? (
+                            <div
+                                className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1.5 rounded-full pr-3 transition-colors mr-2"
+                                onClick={() => router.push('/profile')}
+                            >
+                                <div className="w-8 h-8 rounded-full bg-gray-200 border border-gray-300 overflow-hidden">
+                                    {user.profile_image ? (
+                                        <img src={user.profile_image} alt="Profile" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-sm">👤</div>
+                                    )}
+                                </div>
+                                <span className="text-sm font-bold text-gray-700 hidden sm:block">{user.nickname}</span>
+                            </div>
+                        ) : (
+                            // Logic for LoginModal is complex here without duplicating state. 
+                            // Ideally we pass a "open login" handler or use a global store.
+                            // For now, simpler to redirect to Home with a query param or just simple implementation.
+                            // Since we can't easily perform the modal open here without adding state to ResultsPageContent...
+                            // Let's add the state.
+                            <button
+                                onClick={() => setIsLoginModalOpen(true)}
+                                className="text-sm font-bold text-gray-600 hover:text-gray-900 mr-4"
+                            >
+                                Login
+                            </button>
+                        )}
+
+
                         <button
                             onClick={() => router.push(`/vote/${topicId}`)}
                             className="px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-full hover:bg-blue-700 active:scale-95 transition-all duration-200 shadow-lg shadow-blue-500/30"
@@ -204,6 +239,13 @@ function ResultsPageContent() {
                     </div>
                 </div>
             </header>
+
+            {isLoginModalOpen && (
+                <LoginModal
+                    onClose={() => setIsLoginModalOpen(false)}
+                    onLoginSuccess={() => window.location.reload()} // Simple reload to fetch user
+                />
+            )}
 
             <div className="max-w-7xl mx-auto p-6 lg:p-10 space-y-8">
                 {/* User Profile Stats */}

@@ -9,6 +9,7 @@ import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { getApiUrl } from './lib/api';
 import { useGeolocation } from './hooks/useGeolocation';
+import AuthHeader from './components/AuthHeader';
 
 /**
  * 투표 주제 정보 인터페이스
@@ -78,12 +79,7 @@ export default function HomePage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-[#F5F5F7] p-8 font-sans selection:bg-blue-100 selection:text-blue-900">
       {/* Header */}
-      <header className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-10">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-sm">V</div>
-          <span className="text-xl font-bold tracking-tight text-gray-900">VOTEMAP</span>
-        </div>
-      </header>
+      <AuthHeader />
 
       <div className="w-full max-w-4xl flex flex-col items-center">
         {/* Hero Section */}

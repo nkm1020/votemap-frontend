@@ -23,23 +23,44 @@ export default function UserProfile() {
     const [stats, setStats] = useState<UserStats | null>(null);
     const [loading, setLoading] = useState(true);
     const [showLoginModal, setShowLoginModal] = useState(false);
-    const [user, setUser] = useState<User | null>(null);
+
+    // Use token directly or state
+    const [authUser, setAuthUser] = useState<any>(null);
 
     useEffect(() => {
         const fetchStats = async () => {
             try {
-                const uuid = getDeviceUUID();
-                if (!uuid) return;
-
-                const response = await axios.get(getApiUrl(`/users/${uuid}/stats`));
-                setStats(response.data);
-
-                // For MVP: Check if token exists, and maybe fetching user details would be better
-                // But for now, we rely on local state updates after login
-                const token = typeof window !== 'undefined' ? localStorage.getItem('votemap_token') : null;
-                // If token exists, we could fetch user data (TODO: Needs /auth/me)
+                const token = window.localStorage.getItem('votemap_token');
+                if (token) {
+                    // Fetch Authenticated User Stats
+                    const response = await axios.get(getApiUrl('/auth/me'), {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    // Transform /auth/me response structure to match needed UI
+                    setAuthUser(response.data);
+                    setStats({
+                        total_votes: response.data.stats.totalVotes,
+                        match_rate: response.data.stats.match_rate || 0,
+                        title: response.data.stats.title || 'Citizen',
+                        description: response.data.stats.description || '평범한 시민입니다.',
+                    });
+                } else {
+                    // Fallback to anonymous UUID stats
+                    const uuid = getDeviceUUID();
+                    if (uuid) {
+                        const response = await axios.get(getApiUrl(`/users/${uuid}/stats`));
+                        setStats(response.data);
+                    }
+                }
             } catch (error) {
                 console.error('Failed to fetch user stats:', error);
+
+                // If token failed (expired), try anonymous
+                const uuid = getDeviceUUID();
+                if (uuid) {
+                    const response = await axios.get(getApiUrl(`/users/${uuid}/stats`));
+                    setStats(response.data);
+                }
             } finally {
                 setLoading(false);
             }
@@ -49,7 +70,7 @@ export default function UserProfile() {
     }, []);
 
     const handleGeoVerify = async () => {
-        if (!user) {
+        if (!authUser) {
             setShowLoginModal(true);
             return;
         }
@@ -57,13 +78,16 @@ export default function UserProfile() {
         navigator.geolocation.getCurrentPosition(async (position) => {
             try {
                 const { latitude, longitude } = position.coords;
+                // Requires endpoint for auth user
+                const token = localStorage.getItem('votemap_token');
                 const response = await axios.post(getApiUrl('/auth/geo-verify'), {
-                    user_id: user.id,
                     latitude,
                     longitude
+                }, {
+                    headers: { Authorization: `Bearer ${token}` }
                 });
                 alert(`Verified as resident of ${response.data.verified_region}!`);
-                setUser({ ...user, verified_region: response.data.verified_region });
+                setAuthUser({ ...authUser, verified_region: response.data.verified_region });
             } catch (e) {
                 console.error(e);
                 alert('Verification failed.');
@@ -74,7 +98,7 @@ export default function UserProfile() {
     };
 
     if (loading) return null;
-    if (!stats || stats.total_votes === 0) return null;
+    if (!stats) return null; // Only hide if absolutely no stats (auth or anon)
 
     return (
         <div className="w-full max-w-2xl mx-auto mt-8 p-6 bg-white rounded-2xl shadow-lg border border-gray-100 relative">
@@ -82,9 +106,9 @@ export default function UserProfile() {
                 <h3 className="text-lg font-bold text-gray-800">나의 성향 분석</h3>
                 <div className="flex gap-2 items-center">
                     {/* User Badge / Login Status */}
-                    {user ? (
+                    {authUser ? (
                         <span className="text-sm font-semibold text-gray-700 bg-gray-50 px-3 py-1 rounded-full border border-gray-200">
-                            👤 {user.nickname}
+                            👤 {authUser.nickname}
                         </span>
                     ) : (
                         <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
@@ -93,20 +117,20 @@ export default function UserProfile() {
                     )}
 
                     {/* Geo Verification Button */}
-                    {user?.verified_region ? (
+                    {authUser?.verified_region ? (
                         <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold border border-green-200">
-                            📍 {user.verified_region} 인증됨
+                            📍 {authUser.verified_region} 인증됨
                         </span>
                     ) : (
                         <button
                             onClick={handleGeoVerify}
                             className={`px-3 py-1 rounded-full text-xs font-bold transition flex items-center gap-1
-                                ${user
+                                ${authUser
                                     ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
                                     : 'bg-gray-800 text-white hover:bg-black shadow-sm'
                                 }`}
                         >
-                            {user ? '동네 인증하기' : '로그인 & 인증'}
+                            {authUser ? '동네 인증하기' : '로그인 & 인증'}
                         </button>
                     )}
                 </div>
@@ -142,7 +166,10 @@ export default function UserProfile() {
             {showLoginModal && (
                 <LoginModal
                     onClose={() => setShowLoginModal(false)}
-                    onLoginSuccess={(userData) => setUser(userData)}
+                    onLoginSuccess={(userData) => {
+                        // On simpler implementation: reload to refresh everything
+                        window.location.reload();
+                    }}
                 />
             )}
         </div>

@@ -18,6 +18,8 @@ export const metadata: Metadata = {
   description: "실시간으로 한국의 지역별 투표 결과를 지도로 확인하세요",
 };
 
+import { AuthProvider } from "./context/AuthContext";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -28,7 +30,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
         {/* Kakao SDK Initialization */}
         {/* <Script 
             src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js" 
