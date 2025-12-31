@@ -8,9 +8,11 @@ import { useState, useEffect, Suspense } from 'react';
 import axios from 'axios';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { KOREAN_REGIONS } from '../../lib/regions';
+import { VOTE_REGIONS } from '../../lib/vote-regions';
 import { getApiUrl } from '../../lib/api';
 import { getDeviceUUID } from '../../lib/auth';
 import AuthHeader from '../../components/AuthHeader';
+import RegionSearch from '../../components/RegionSearch';
 
 /**
  * 투표 주제 정보 인터페이스
@@ -64,11 +66,7 @@ function VotePageContent() {
 
           if (statusRes.data.hasVoted) {
             if (!statusRes.data.canVoteAgain) {
-              // Already voted and cannot vote again -> Show message instead of redirect
               setVoteStatus('already_voted');
-            } else {
-              // Can vote again -> Show message (Optional)
-              // We can set a state to show "Re-vote enabled"
             }
           }
         } catch (e) {
@@ -91,6 +89,8 @@ function VotePageContent() {
     fetchData();
   }, [topicId, router]);
 
+  const [isIpLocation, setIsIpLocation] = useState(false);
+
   /**
    * URL 파라미터 기반 자동 선택 처리
    */
@@ -98,26 +98,70 @@ function VotePageContent() {
     const auto = searchParams.get('auto');
     const district = searchParams.get('district'); // 시/군/구 (e.g. 일산동구, 강남구)
     const province = searchParams.get('province'); // 시/도 (e.g. 경기도, 서울특별시)
+    const source = searchParams.get('source');
+
+    console.log('VotePage Params:', { auto, district, province, source });
 
     if (auto === 'true') {
-      let matchedRegion = null;
+      let matchedRegionName = null;
 
+      // 1. Try Exact Match in VOTE_REGIONS
       if (district) {
-        // 정확한 매칭 시도 (KOREAN_REGIONS에 있는가?)
-        if (KOREAN_REGIONS.includes(district)) {
-          matchedRegion = district;
+        const exactMatch = VOTE_REGIONS.find(r => r.name === district);
+        if (exactMatch) matchedRegionName = exactMatch.name;
+      }
+
+      // 2. Try Smart Match against VOTE_REGIONS
+      if (!matchedRegionName && province && district) {
+        // Normalize inputs
+        const cleanProv = province.replace(/\s+/g, '');
+        const cleanDist = district.replace(/\s+/g, '');
+
+        // Check if VOTE_REGION name contains both province part and district part
+        const found = VOTE_REGIONS.find(r => {
+          const cleanName = r.name.replace(/\s+/g, '');
+          return cleanName.includes(cleanProv) && cleanName.includes(cleanDist);
+        });
+
+        if (found) {
+          matchedRegionName = found.name;
         }
       }
 
-      // district로 못 찾았으면 province 확인 (세종시 등)
-      if (!matchedRegion && province && KOREAN_REGIONS.includes(province)) {
-        matchedRegion = province;
-        if (province === '세종특별자치시') matchedRegion = '세종시';
+      // 3. Fallback: Province match only (special cases like Sejong)
+      if (!matchedRegionName && province) {
+        if (province === '세종특별자치시' || province === '세종시') {
+          const sejong = VOTE_REGIONS.find(r => r.name.includes('세종'));
+          if (sejong) matchedRegionName = sejong.name;
+        }
       }
 
-      if (matchedRegion) {
-        setSelectedRegion(matchedRegion);
-        setIsAutoMode(true);
+      // 4. Fallback: "City as Province" case (e.g. Nominatim returns "Paju-si" as region1, no region2)
+      if (!matchedRegionName && !district && province) {
+        // Find all regions that contain this 'province' string (which might be '파주시')
+        const candidates = VOTE_REGIONS.filter(r => r.name.includes(province));
+
+        if (candidates.length === 1) {
+          // Unique match found! (e.g. "파주시" -> "경기도 파주시")
+          matchedRegionName = candidates[0].name;
+        } else if (candidates.length > 1) {
+          // Ambiguous (e.g. "중구" -> Seoul, Busan, Daegu...)
+          console.warn(`Ambiguous region param: ${province}. Candidates: ${candidates.length}`);
+        }
+      }
+
+      console.log('Matched Region for Auto:', matchedRegionName);
+
+      if (matchedRegionName) {
+        setSelectedRegion(matchedRegionName);
+        if (source === 'ip') {
+          setIsIpLocation(true);
+          setIsAutoMode(false); // IP detected -> Warn user
+        } else {
+          setIsAutoMode(true); // GPS detected -> Allow direct confirm
+        }
+      } else {
+        console.warn('Auto mode requested but no region matched.', { province, district });
       }
     }
   }, [searchParams]);
@@ -140,7 +184,6 @@ function VotePageContent() {
     setError(null);
 
     try {
-      // Lazy Auth: Get or initiate device UUID
       const user_uuid = getDeviceUUID();
       const token = localStorage.getItem('votemap_token');
 
@@ -150,19 +193,24 @@ function VotePageContent() {
         region: selectedRegion,
         user_uuid: user_uuid,
       }, {
-        // Send token if available (though backend might not enforce it, it's good practice)
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
 
       setVoteStatus('voted');
 
       setTimeout(() => {
-        router.replace(`/results?topic=${topic.id}`); // Use replace to prevent back button voting
+        // Redirect with vote context for sharing
+        const query = new URLSearchParams({
+          topic: topic.id.toString(),
+          voted: 'true',
+          choice: choice,
+          region: selectedRegion
+        }).toString();
+        router.replace(`/results?${query}`);
       }, 1500);
 
     } catch (err: any) {
       if (err.response && (err.response.status === 400 || err.response.status === 500)) {
-        // Check message
         if (err.response.data?.message === 'Already voted for this topic') {
           setError('이미 참여한 투표입니다.');
           setTimeout(() => router.replace(`/results?topic=${topic.id}`), 1000);
@@ -182,8 +230,6 @@ function VotePageContent() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-gray-100 p-8">
-      {/* Replaced Header with AuthHeader logic? Or just use AuthHeader component if it supports absolute positioning */}
-      {/* AuthHeader is absolute by default, let's try using it */}
       <AuthHeader />
 
       <div className="w-full max-w-2xl rounded-lg bg-white p-8 text-center shadow-lg">
@@ -234,20 +280,22 @@ function VotePageContent() {
                       <label htmlFor="region-select" className="block text-lg font-semibold text-gray-700 mb-2">
                         지역 선택
                       </label>
-                      <select
-                        id="region-select"
-                        value={selectedRegion}
-                        onChange={(e) => setSelectedRegion(e.target.value)}
-                        className="w-full px-4 py-3 text-lg border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+
+                      {isIpLocation && (
+                        <div className="mb-3 p-3 bg-yellow-50 text-yellow-700 rounded-lg text-sm border border-yellow-100 flex items-center gap-2">
+                          <span>⚠️</span>
+                          <span>IP로 감지된 위치입니다. 더 정확한 동네(구/군)를 검색해주세요.</span>
+                        </div>
+                      )}
+
+                      <RegionSearch
+                        onSelect={(region) => {
+                          setSelectedRegion(region.map_name || region.name);
+                          setIsIpLocation(false);
+                        }}
+                        placeholder={selectedRegion ? selectedRegion : "지역을 검색하세요"}
                         disabled={voteStatus !== 'idle'}
-                      >
-                        <option value="">지역을 선택하세요</option>
-                        {KOREAN_REGIONS.map((region) => (
-                          <option key={region} value={region}>
-                            {region}
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </>
                   )}
                 </div>
@@ -279,13 +327,14 @@ function VotePageContent() {
               <p className="text-xl">해당 주제를 찾을 수 없습니다.</p>
             )}
           </>
-        )}
-      </div>
+        )
+        }
+      </div >
 
       <div className="mt-4 text-center text-sm text-gray-500">
         <p>실시간 한국 여론 지형 지도</p>
       </div>
-    </main>
+    </main >
   );
 }
 

@@ -31,8 +31,6 @@ interface KoreaMapProps {
 // 상세 지도 SVG 파일 사용
 const SVG_FILE = 'korea-sig-2024';
 
-
-
 /**
  * 지역의 우세한 선택지를 결정합니다
  */
@@ -83,6 +81,14 @@ export default function KoreaMap({
             }
         }
 
+        // Try reverse matching (SVG has "파주시" but results have "경기도 파주시")
+        if (!regionVotes) {
+            const matchKey = Object.keys(results).find(key => key.endsWith(` ${regionName}`) || key === regionName);
+            if (matchKey) {
+                regionVotes = results[matchKey];
+            }
+        }
+
 
 
         if (!regionVotes || !topic) return { totalVotes: 0, topVotes: [] };
@@ -103,6 +109,45 @@ export default function KoreaMap({
      * 투표 결과에 따라 색상을 적용합니다
      */
     const applyColors = useCallback((svg: SVGElement) => {
+        // 1. 전체 지역 중 최대 투표수 계산 (Opacity 정규화용)
+        let maxTotalVotes = 0;
+        Object.values(results).forEach(r => {
+            const total = (r.A || 0) + (r.B || 0);
+            if (total > maxTotalVotes) maxTotalVotes = total;
+        });
+
+        // 2. 색상 혼합 및 Opacity 계산 함수
+        const getColor = (a: number, b: number) => {
+            const total = a + b;
+            if (total === 0) return noVoteColor;
+
+            // Ratio of A (0.0 ~ 1.0)
+            // A=100% -> p=1.0 (Blue), B=100% -> p=0.0 (Red)
+            const p = a / total;
+
+            // Pastel Colors (RGB)
+            // Blue (A): rgb(96, 165, 250) - Tailwind Blue-400ish
+            // Red (B): rgb(248, 113, 113) - Tailwind Red-400ish
+            const cA = { r: 96, g: 165, b: 250 }; // #60a5fa (Blue-400)
+            const cB = { r: 248, g: 113, b: 113 }; // #f87171 (Red-400)
+
+            // Linear Interpolation
+            const r = Math.round(cA.r * p + cB.r * (1 - p));
+            const g = Math.round(cA.g * p + cB.g * (1 - p));
+            const blue = Math.round(cA.b * p + cB.b * (1 - p));
+
+            // Opacity Calculation (Logarithmic Scale)
+            // Minimum opacity 0.3 to ensure visibility even with 1 vote
+            const minAlpha = 0.3;
+            const maxAlpha = 1.0;
+
+            // Log scale to prevent high vote regions from drowning out everyone else
+            const normalizedScore = Math.log(total + 1) / Math.log(maxTotalVotes + 1);
+            const alpha = minAlpha + (maxAlpha - minAlpha) * normalizedScore;
+
+            return `rgba(${r}, ${g}, ${blue}, ${alpha})`; // Retain alpha transparency
+        };
+
         // 모든 path에 색상 적용
         const paths = svg.querySelectorAll('path');
         paths.forEach((path) => {
@@ -121,6 +166,7 @@ export default function KoreaMap({
             let regionData = results[regionName];
 
             // 2. 일치하는 데이터가 없고 공백이 포함된 경우 (예: "고양시 일산동구"), 뒷부분("일산동구")으로 재탐색
+            // (SVG ID가 "고양시 일산동구"인데 데이터가 "일산동구"인 경우)
             if (!regionData && regionName.includes(' ')) {
                 const shortName = regionName.split(' ').pop();
                 if (shortName) {
@@ -128,30 +174,33 @@ export default function KoreaMap({
                 }
             }
 
-
+            // 3. 일치하는 데이터가 여전히 없고 (SVG ID가 "파주시"인데 데이터가 "경기도 파주시"인 경우)
+            // 전체 결과 키 중에서 현재 regionName으로 끝나는 키를 찾음
+            if (!regionData) {
+                const matchKey = Object.keys(results).find(key => key.endsWith(` ${regionName}`) || key === regionName);
+                if (matchKey) {
+                    regionData = results[matchKey];
+                }
+            }
 
             // 3. 그래도 없으면 상위(시도) 데이터 확인
             if (!regionData && parentName) {
                 regionData = results[parentName];
             }
 
-            const dominant = getDominantChoice(regionData || {});
+            const aCount = regionData?.A || 0;
+            const bCount = regionData?.B || 0;
 
-            let fillColor = noVoteColor;
-            if (dominant === 'A') {
-                fillColor = optionAColor;
-            } else if (dominant === 'B') {
-                fillColor = optionBColor;
-            } else if (dominant === 'draw') {
-                fillColor = drawColor;
-            }
+            const fillColor = getColor(aCount, bCount);
 
             path.setAttribute('fill', fillColor);
             path.setAttribute('stroke', '#ffffff');
+            // Stroke width also adjusted slightly to separate regions cleanly
+            // If alpha is low, white stroke might overlap weirdly, but usually fine.
             path.setAttribute('stroke-width', '0.5');
             path.setAttribute('vector-effect', 'non-scaling-stroke'); // 줌 레벨에 관계없이 두께 유지
         });
-    }, [results, optionAColor, optionBColor, noVoteColor, drawColor]);
+    }, [results, noVoteColor]);
 
     /**
      * 유효한 지역 path인지 확인
@@ -650,4 +699,3 @@ export default function KoreaMap({
         </div>
     );
 }
-

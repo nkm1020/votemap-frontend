@@ -69,6 +69,7 @@ export default function HomePage() {
         params.set('district', location.region2);
       }
       params.set('auto', 'true');
+      params.set('source', location.source || 'gps');
       router.push(`/vote/${topicId}?${params.toString()}`);
     } else {
       // 없으면 일반 선택 페이지로 이동

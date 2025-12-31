@@ -14,6 +14,7 @@ import UserProfile from '../components/UserProfile';
 import { getApiUrl, getSocketUrl } from '../lib/api';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import LoginModal from '../components/LoginModal';
+import ShareModal from '../components/ShareModal';
 
 /**
  * 투표 결과 데이터 인터페이스
@@ -47,11 +48,23 @@ function ResultsPageContent() {
     const socketRef = useRef<Socket | null>(null);
     const router = useRouter();
     const searchParams = useSearchParams();
+    const [showShareModal, setShowShareModal] = useState(false);
+
+    // Share Modal Params
+    const hasVoted = searchParams?.get('voted') === 'true';
+    const votedChoice = searchParams?.get('choice') || 'A';
+    const votedRegion = searchParams?.get('region') || '';
+
+    useEffect(() => {
+        if (hasVoted) {
+            setShowShareModal(true);
+        }
+    }, [hasVoted]);
 
     const { user } = useCurrentUser();
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
-    const topicId = searchParams?.get('topic') || '1';
+    const topicId = searchParams?.get('topicId') || searchParams?.get('topic') || '1';
 
     /**
      * 컴포넌트 마운트 및 topicId 변경 시:
@@ -146,8 +159,47 @@ function ResultsPageContent() {
         }))
         .sort((a, b) => b.total - a.total);
 
+    const handleCloseShareModal = () => {
+        setShowShareModal(false);
+        // Optional: Clean URL
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.delete('voted');
+        newUrl.searchParams.delete('choice');
+        newUrl.searchParams.delete('region');
+        router.replace(newUrl.pathname + newUrl.search);
+    };
+
+    // Calculate local stats for the shared region if available
+    let localPercent = 0;
+    let isLeading = false;
+
+    if (results && votedRegion && results.by_region[votedRegion]) {
+        const regionData = results.by_region[votedRegion];
+        const rTotal = (regionData.A || 0) + (regionData.B || 0);
+        if (rTotal > 0) {
+            const myVoteCount = votedChoice === 'A' ? (regionData.A || 0) : (regionData.B || 0);
+            const otherVoteCount = votedChoice === 'A' ? (regionData.B || 0) : (regionData.A || 0);
+            localPercent = (myVoteCount / rTotal) * 100;
+            localPercent = Math.round(localPercent * 10) / 10; // 1 decimal place
+            isLeading = myVoteCount >= otherVoteCount;
+        }
+    }
+
+
     return (
         <main className="min-h-screen bg-[#F5F5F7] font-sans selection:bg-blue-100 selection:text-blue-900 pb-20">
+            {/* Share Modal Overlay */}
+            {showShareModal && (
+                <ShareModal
+                    onClose={handleCloseShareModal}
+                    topicTitle={topic.title}
+                    choice={votedChoice === 'A' ? topic.option_a : topic.option_b}
+                    region={votedRegion}
+                    percent={localPercent}
+                    isLeading={isLeading}
+                />
+            )}
+
             {/* Sticky Glass Header */}
             <header className="sticky top-0 z-30 bg-white/70 backdrop-blur-xl border-b border-gray-200/50 transition-all duration-300">
                 <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">

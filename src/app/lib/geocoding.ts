@@ -61,6 +61,12 @@ export async function reverseGeocode(lat: number, lng: number): Promise<Location
         let region1 = address.province || address.city || ''; // Do or Si
         let region2 = address.borough || address.district || address.county || ''; // Gu or Gun
 
+        // Fix for "Province + City" pattern (e.g. Gyeonggi-do Paju-si)
+        // If province is present, but region2 (district) is empty, check if 'city' exists and use it as region2
+        if (address.province && !region2 && address.city && address.city !== address.province) {
+            region2 = address.city;
+        }
+
         // Special handling for Metropolitan cities (Seoul, Busan, etc.)
         // Nominatim often puts 'Seoul' in 'city' and 'Gangnam-gu' in 'borough'
         // Or 'Gyeonggi-do' in 'province' and 'Suwon-si' in 'city'

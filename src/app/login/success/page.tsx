@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { getApiUrl } from '../../lib/api';
-import { getDeviceUUID } from '../../lib/auth'; // Ensure this import works or use require if needed
+import { getDeviceUUID } from '../../lib/auth';
 import axios from 'axios';
 
-export default function LoginSuccessPage() {
+function LoginCallback() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { login } = useAuth();
@@ -47,5 +47,17 @@ export default function LoginSuccessPage() {
             <h2 className="text-2xl font-bold mb-4">로그인 처리 중...</h2>
             <p className="text-gray-500">잠시만 기다려주세요.</p>
         </div>
+    );
+}
+
+export default function LoginSuccessPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex flex-col items-center justify-center min-h-screen bg-white">
+                <p className="text-gray-500">Loading...</p>
+            </div>
+        }>
+            <LoginCallback />
+        </Suspense>
     );
 }
